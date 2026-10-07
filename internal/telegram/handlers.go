@@ -73,6 +73,7 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 	if !ok {
 		return fmt.Errorf("student context is missing")
 	}
+	isAdmin := student.Role == "admin"
 	active, err := collections.ListActive(context.Background())
 	if err != nil {
 		return fmt.Errorf("list collections: %w", err)
@@ -82,13 +83,16 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 	}
 	var builder strings.Builder
 	for _, collection := range active {
-		paid, err := payments.ExistsForStudentCollection(context.Background(), student.ID, collection.ID)
-		if err != nil {
-			return fmt.Errorf("get payment status: %w", err)
-		}
-		status := "не оплачено"
-		if paid {
-			status = "оплачено"
+		status := "статус доступний студентам"
+		if !isAdmin {
+			paid, err := payments.ExistsForStudentCollection(context.Background(), student.ID, collection.ID)
+			if err != nil {
+				return fmt.Errorf("get payment status: %w", err)
+			}
+			status = "не оплачено"
+			if paid {
+				status = "оплачено"
+			}
 		}
 		fmt.Fprintf(&builder, "• %s — %d коп., дедлайн %s — %s\n",
 			collection.Title, collection.Amount, collection.DeadlineAt.Format("02.01.2006 15:04"), status)

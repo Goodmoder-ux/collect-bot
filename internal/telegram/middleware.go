@@ -27,8 +27,12 @@ func (b *Bot) RequireAdmin(next telebot.HandlerFunc) telebot.HandlerFunc {
 func (b *Bot) RequireStudent(next telebot.HandlerFunc) telebot.HandlerFunc {
 	return func(c telebot.Context) error {
 		sender := c.Sender()
-		if sender == nil || sender.ID == b.adminID {
+		if sender == nil {
 			return b.reject(c)
+		}
+		if sender.ID == b.adminID {
+			c.Set(studentContextKey, domain.Student{TelegramID: &sender.ID, Role: "admin"})
+			return next(c)
 		}
 		student, err := b.students.GetByTelegramID(context.Background(), sender.ID)
 		if err != nil {

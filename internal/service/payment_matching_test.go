@@ -22,6 +22,15 @@ func (f *fakeStudents) GetByID(_ context.Context, id int64) (domain.Student, err
 	return domain.Student{}, errors.New("student not found")
 }
 
+func (f *fakeStudents) GetByTelegramID(_ context.Context, telegramID int64) (domain.Student, error) {
+	for _, student := range f.students {
+		if student.TelegramID != nil && *student.TelegramID == telegramID {
+			return student, nil
+		}
+	}
+	return domain.Student{}, errors.New("student not found")
+}
+
 func (f *fakeStudents) ListUnregistered(context.Context) ([]domain.Student, error) { return nil, nil }
 func (f *fakeStudents) ListRegistered(context.Context) ([]domain.Student, error) {
 	return f.students, nil

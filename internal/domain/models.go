@@ -49,6 +49,7 @@ type TransactionSource interface {
 
 type StudentRepository interface {
 	GetByID(ctx context.Context, id int64) (Student, error)
+	GetByTelegramID(ctx context.Context, telegramID int64) (Student, error)
 	ListUnregistered(ctx context.Context) ([]Student, error)
 	// ListRegistered returns students whose Telegram account has been confirmed.
 	ListRegistered(ctx context.Context) ([]Student, error)

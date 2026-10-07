@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,4 +32,20 @@ func (b *Bot) Start() {
 
 func (b *Bot) Stop() {
 	b.Client.Stop()
+}
+
+type Notifier struct {
+	bot *Bot
+}
+
+func NewNotifier(bot *Bot) *Notifier {
+	return &Notifier{bot: bot}
+}
+
+func (n *Notifier) Send(ctx context.Context, telegramID int64, text string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	_, err := n.bot.Client.Send(&telebot.User{ID: telegramID}, text)
+	return err
 }

@@ -53,6 +53,7 @@ type StudentRepository interface {
 	ListUnregistered(ctx context.Context) ([]Student, error)
 	// ListRegistered returns students whose Telegram account has been confirmed.
 	ListRegistered(ctx context.Context) ([]Student, error)
+	SetTelegramID(ctx context.Context, studentID, telegramID int64) error
 }
 
 type CollectionRepository interface {

@@ -33,6 +33,22 @@ func (r *StudentRepository) GetByTelegramID(ctx context.Context, telegramID int6
 	return student, nil
 }
 
+func (r *StudentRepository) SetTelegramID(ctx context.Context, studentID, telegramID int64) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE students SET telegram_id = ? WHERE id = ? AND telegram_id IS NULL`,
+		telegramID, studentID)
+	if err != nil {
+		return fmt.Errorf("link student %d to Telegram ID %d: %w", studentID, telegramID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check student %d link: %w", studentID, err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("student %d is already linked or does not exist", studentID)
+	}
+	return nil
+}
+
 func (r *StudentRepository) ListUnregistered(ctx context.Context) ([]domain.Student, error) {
 	return r.list(ctx, `WHERE telegram_id IS NULL`)
 }

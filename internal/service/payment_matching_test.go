@@ -31,6 +31,8 @@ func (f *fakeStudents) GetByTelegramID(_ context.Context, telegramID int64) (dom
 	return domain.Student{}, errors.New("student not found")
 }
 
+func (f *fakeStudents) SetTelegramID(context.Context, int64, int64) error { return nil }
+
 func (f *fakeStudents) ListUnregistered(context.Context) ([]domain.Student, error) { return nil, nil }
 func (f *fakeStudents) ListRegistered(context.Context) ([]domain.Student, error) {
 	return f.students, nil

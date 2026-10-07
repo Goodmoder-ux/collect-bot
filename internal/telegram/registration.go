@@ -47,10 +47,12 @@ func (b *Bot) handleStart(c telebot.Context) error {
 		return c.Send("Вільних записів для реєстрації немає.")
 	}
 	markup := &telebot.ReplyMarkup{}
+	rows := make([]telebot.Row, 0, len(students))
 	for _, student := range students {
 		button := telebot.Btn{Unique: "register_student", Text: student.FullName, Data: strconv.FormatInt(student.ID, 10)}
-		markup.Inline(markup.Row(button))
+		rows = append(rows, markup.Row(button))
 	}
+	markup.Inline(rows...)
 	return c.Send("Оберіть своє ім'я зі списку:", markup)
 }
 

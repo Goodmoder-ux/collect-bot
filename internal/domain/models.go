@@ -50,15 +50,19 @@ type TransactionSource interface {
 type StudentRepository interface {
 	GetByID(ctx context.Context, id int64) (Student, error)
 	ListUnregistered(ctx context.Context) ([]Student, error)
+	ListRegistered(ctx context.Context) ([]Student, error)
 }
 
 type CollectionRepository interface {
 	ListActive(ctx context.Context) ([]Collection, error)
+	CloseIfAllStudentsPaid(ctx context.Context, collectionID int64) (bool, error)
 }
 
 type PaymentRepository interface {
 	ExistsByMonoTransactionID(ctx context.Context, id string) (bool, error)
+	GetByID(ctx context.Context, id int64) (Payment, error)
 	Create(ctx context.Context, payment Payment) error
+	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
 }
 
 type ReminderRepository interface {

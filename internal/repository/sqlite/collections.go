@@ -89,6 +89,7 @@ func (r *CollectionRepository) Create(ctx context.Context, title string, amount 
 	return id, nil
 }
 
+// CloseManually closes an active collection by administrator request.
 func (r *CollectionRepository) CloseManually(ctx context.Context, collectionID int64) error {
 	result, err := r.db.ExecContext(ctx, `UPDATE collections
 		SET status = 'closed', closed_reason = 'manual_admin', closed_at = CURRENT_TIMESTAMP

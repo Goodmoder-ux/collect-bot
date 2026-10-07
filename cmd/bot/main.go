@@ -40,6 +40,7 @@ func run() error {
 	collections := sqlite.NewCollectionRepository(db)
 	payments := sqlite.NewPaymentRepository(db)
 	reminders := sqlite.NewReminderRepository(db)
+	// Repositories are concrete SQLite implementations of the domain contracts.
 	reports := sqlite.NewAdminReportRepository(db)
 	matcher := service.NewPaymentMatcher(students, collections, payments)
 	mono := monobank.NewClient(cfg.MonobankToken)

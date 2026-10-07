@@ -11,6 +11,7 @@ import (
 
 type AdminReportRepository struct{ db *sql.DB }
 
+// NewAdminReportRepository creates a SQLite-backed report repository.
 func NewAdminReportRepository(db *sql.DB) *AdminReportRepository {
 	return &AdminReportRepository{db: db}
 }

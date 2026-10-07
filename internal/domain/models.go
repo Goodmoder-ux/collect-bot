@@ -49,17 +49,21 @@ type TransactionSource interface {
 
 type StudentRepository interface {
 	GetByID(ctx context.Context, id int64) (Student, error)
+	// GetByTelegramID finds a student linked to a Telegram account.
 	GetByTelegramID(ctx context.Context, telegramID int64) (Student, error)
 	ListUnregistered(ctx context.Context) ([]Student, error)
 	// ListRegistered returns students whose Telegram account has been confirmed.
 	ListRegistered(ctx context.Context) ([]Student, error)
+	// SetTelegramID links an unregistered student after admin approval.
 	SetTelegramID(ctx context.Context, studentID, telegramID int64) error
 }
 
 type CollectionRepository interface {
 	ListActive(ctx context.Context) ([]Collection, error)
 	CloseIfAllStudentsPaid(ctx context.Context, collectionID int64) (bool, error)
+	// Create adds an active collection.
 	Create(ctx context.Context, title string, amount int64, deadline time.Time) (int64, error)
+	// CloseManually closes an active collection by administrator action.
 	CloseManually(ctx context.Context, collectionID int64) error
 }
 
@@ -68,12 +72,14 @@ type PaymentRepository interface {
 	// ExistsForStudentCollection reports whether a payment is assigned to both IDs.
 	ExistsForStudentCollection(ctx context.Context, studentID, collectionID int64) (bool, error)
 	GetByID(ctx context.Context, id int64) (Payment, error)
+	// ListUnmatched returns payments requiring administrator review.
 	ListUnmatched(ctx context.Context) ([]Payment, error)
 	Create(ctx context.Context, payment Payment) error
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
 }
 
 type AdminReportRepository interface {
+	// Create persists a report sent to the administrator.
 	Create(ctx context.Context, collectionID int64, body string, sentAt time.Time) error
 }
 

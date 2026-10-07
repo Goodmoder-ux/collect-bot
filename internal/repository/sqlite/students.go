@@ -23,6 +23,7 @@ func (r *StudentRepository) GetByID(ctx context.Context, id int64) (domain.Stude
 	return student, nil
 }
 
+// GetByTelegramID returns the student linked to telegramID.
 func (r *StudentRepository) GetByTelegramID(ctx context.Context, telegramID int64) (domain.Student, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT id, telegram_id, full_name, role, created_at
 		FROM students WHERE telegram_id = ?`, telegramID)

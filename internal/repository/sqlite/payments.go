@@ -44,6 +44,7 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id int64) (domain.Payme
 	return payment, nil
 }
 
+// ListUnmatched returns payments that need manual matching.
 func (r *PaymentRepository) ListUnmatched(ctx context.Context) ([]domain.Payment, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT id, mono_tx_id, amount, comment_raw, received_at,
 		student_id, collection_id, match_method, matched_at

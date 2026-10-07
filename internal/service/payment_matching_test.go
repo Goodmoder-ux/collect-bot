@@ -50,6 +50,10 @@ func (f *fakeCollections) CloseIfAllStudentsPaid(_ context.Context, id int64) (b
 	f.closed = append(f.closed, id)
 	return false, nil
 }
+func (f *fakeCollections) Create(context.Context, string, int64, time.Time) (int64, error) {
+	return 0, nil
+}
+func (f *fakeCollections) CloseManually(context.Context, int64) error { return nil }
 
 type fakePayments struct {
 	existing map[string]bool
@@ -66,6 +70,7 @@ func (f *fakePayments) ExistsForStudentCollection(context.Context, int64, int64)
 func (f *fakePayments) GetByID(context.Context, int64) (domain.Payment, error) {
 	return domain.Payment{}, errors.New("not implemented")
 }
+func (f *fakePayments) ListUnmatched(context.Context) ([]domain.Payment, error) { return nil, nil }
 func (f *fakePayments) Create(_ context.Context, payment domain.Payment) error {
 	f.created = append(f.created, payment)
 	return nil

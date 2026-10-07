@@ -81,9 +81,27 @@ func (r *CollectionRepository) Create(ctx context.Context, title string, amount 
 	if err != nil {
 		return 0, fmt.Errorf("create collection: %w", err)
 	}
+
 	id, err := result.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("get created collection ID: %w", err)
 	}
 	return id, nil
+}
+
+func (r *CollectionRepository) CloseManually(ctx context.Context, collectionID int64) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE collections
+		SET status = 'closed', closed_reason = 'manual_admin', closed_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND status = 'active'`, collectionID)
+	if err != nil {
+		return fmt.Errorf("close collection %d manually: %w", collectionID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check manual close for collection %d: %w", collectionID, err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("collection %d is not active", collectionID)
+	}
+	return nil
 }

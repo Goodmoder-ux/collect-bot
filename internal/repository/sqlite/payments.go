@@ -40,7 +40,30 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id int64) (domain.Payme
 	if err != nil {
 		return domain.Payment{}, fmt.Errorf("get payment %d: %w", id, err)
 	}
+
 	return payment, nil
+}
+
+func (r *PaymentRepository) ListUnmatched(ctx context.Context) ([]domain.Payment, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, mono_tx_id, amount, comment_raw, received_at,
+		student_id, collection_id, match_method, matched_at
+		FROM payments WHERE match_method = 'unmatched' ORDER BY received_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list unmatched payments: %w", err)
+	}
+	defer rows.Close()
+	var result []domain.Payment
+	for rows.Next() {
+		payment, err := scanPayment(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan unmatched payment: %w", err)
+		}
+		result = append(result, payment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate unmatched payments: %w", err)
+	}
+	return result, nil
 }
 
 func (r *PaymentRepository) Create(ctx context.Context, payment domain.Payment) error {

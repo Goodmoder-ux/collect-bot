@@ -59,6 +59,8 @@ type StudentRepository interface {
 type CollectionRepository interface {
 	ListActive(ctx context.Context) ([]Collection, error)
 	CloseIfAllStudentsPaid(ctx context.Context, collectionID int64) (bool, error)
+	Create(ctx context.Context, title string, amount int64, deadline time.Time) (int64, error)
+	CloseManually(ctx context.Context, collectionID int64) error
 }
 
 type PaymentRepository interface {
@@ -66,8 +68,13 @@ type PaymentRepository interface {
 	// ExistsForStudentCollection reports whether a payment is assigned to both IDs.
 	ExistsForStudentCollection(ctx context.Context, studentID, collectionID int64) (bool, error)
 	GetByID(ctx context.Context, id int64) (Payment, error)
+	ListUnmatched(ctx context.Context) ([]Payment, error)
 	Create(ctx context.Context, payment Payment) error
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
+}
+
+type AdminReportRepository interface {
+	Create(ctx context.Context, collectionID int64, body string, sentAt time.Time) error
 }
 
 type ReminderRepository interface {

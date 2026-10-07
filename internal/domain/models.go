@@ -61,6 +61,8 @@ type CollectionRepository interface {
 
 type PaymentRepository interface {
 	ExistsByMonoTransactionID(ctx context.Context, id string) (bool, error)
+	// ExistsForStudentCollection reports whether a payment is assigned to both IDs.
+	ExistsForStudentCollection(ctx context.Context, studentID, collectionID int64) (bool, error)
 	GetByID(ctx context.Context, id int64) (Payment, error)
 	Create(ctx context.Context, payment Payment) error
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error

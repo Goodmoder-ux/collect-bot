@@ -23,6 +23,16 @@ func (r *PaymentRepository) ExistsByMonoTransactionID(ctx context.Context, id st
 	return exists, nil
 }
 
+func (r *PaymentRepository) ExistsForStudentCollection(ctx context.Context, studentID, collectionID int64) (bool, error) {
+	var exists bool
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(
+		SELECT 1 FROM payments WHERE student_id = ? AND collection_id = ?
+	)`, studentID, collectionID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check payment for student %d and collection %d: %w", studentID, collectionID, err)
+	}
+	return exists, nil
+}
+
 func (r *PaymentRepository) GetByID(ctx context.Context, id int64) (domain.Payment, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT id, mono_tx_id, amount, comment_raw, received_at, student_id,
 		collection_id, match_method, matched_at FROM payments WHERE id = ?`, id)

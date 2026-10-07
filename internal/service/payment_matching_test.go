@@ -49,6 +49,9 @@ type fakePayments struct {
 func (f *fakePayments) ExistsByMonoTransactionID(_ context.Context, id string) (bool, error) {
 	return f.existing[id], nil
 }
+func (f *fakePayments) ExistsForStudentCollection(context.Context, int64, int64) (bool, error) {
+	return false, nil
+}
 func (f *fakePayments) GetByID(context.Context, int64) (domain.Payment, error) {
 	return domain.Payment{}, errors.New("not implemented")
 }

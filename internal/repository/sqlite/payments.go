@@ -52,6 +52,7 @@ func (r *PaymentRepository) ListUnmatched(ctx context.Context) ([]domain.Payment
 	if err != nil {
 		return nil, fmt.Errorf("list unmatched payments: %w", err)
 	}
+
 	defer rows.Close()
 	var result []domain.Payment
 	for rows.Next() {
@@ -63,6 +64,28 @@ func (r *PaymentRepository) ListUnmatched(ctx context.Context) ([]domain.Payment
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate unmatched payments: %w", err)
+	}
+	return result, nil
+}
+
+func (r *PaymentRepository) ListForCollection(ctx context.Context, collectionID int64) ([]domain.Payment, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, mono_tx_id, amount, comment_raw, received_at,
+		student_id, collection_id, match_method, matched_at
+		FROM payments WHERE collection_id = ? ORDER BY matched_at`, collectionID)
+	if err != nil {
+		return nil, fmt.Errorf("list payments for collection %d: %w", collectionID, err)
+	}
+	defer rows.Close()
+	var result []domain.Payment
+	for rows.Next() {
+		payment, err := scanPayment(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan collection payment: %w", err)
+		}
+		result = append(result, payment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate collection payments: %w", err)
 	}
 	return result, nil
 }

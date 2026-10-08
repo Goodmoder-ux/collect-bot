@@ -15,6 +15,16 @@ func NewCollectionRepository(db *sql.DB) *CollectionRepository { return &Collect
 
 var _ domain.CollectionRepository = (*CollectionRepository)(nil)
 
+func (r *CollectionRepository) GetByID(ctx context.Context, id int64) (domain.Collection, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT id, title, amount, deadline_at, status, closed_reason, created_at, closed_at
+		FROM collections WHERE id = ?`, id)
+	collection, err := scanCollection(row)
+	if err != nil {
+		return domain.Collection{}, fmt.Errorf("get collection %d: %w", id, err)
+	}
+	return collection, nil
+}
+
 func (r *CollectionRepository) ListActive(ctx context.Context) ([]domain.Collection, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT id, title, amount, deadline_at, status, closed_reason, created_at, closed_at
 		FROM collections WHERE status = 'active' ORDER BY id`)

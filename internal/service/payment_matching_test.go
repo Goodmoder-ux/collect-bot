@@ -53,6 +53,14 @@ type fakeCollections struct {
 func (f *fakeCollections) ListActive(context.Context) ([]domain.Collection, error) {
 	return f.collections, nil
 }
+func (f *fakeCollections) GetByID(_ context.Context, id int64) (domain.Collection, error) {
+	for _, collection := range f.collections {
+		if collection.ID == id {
+			return collection, nil
+		}
+	}
+	return domain.Collection{}, errors.New("collection not found")
+}
 func (f *fakeCollections) CloseIfAllStudentsPaid(_ context.Context, id int64) (bool, error) {
 	f.closed = append(f.closed, id)
 	return false, nil
@@ -78,6 +86,9 @@ func (f *fakePayments) GetByID(context.Context, int64) (domain.Payment, error) {
 	return domain.Payment{}, errors.New("not implemented")
 }
 func (f *fakePayments) ListUnmatched(context.Context) ([]domain.Payment, error) { return nil, nil }
+func (f *fakePayments) ListForCollection(context.Context, int64) ([]domain.Payment, error) {
+	return nil, nil
+}
 func (f *fakePayments) Create(_ context.Context, payment domain.Payment) error {
 	f.created = append(f.created, payment)
 	return nil
@@ -172,7 +183,24 @@ func TestPaymentMatcherIgnoresDuplicateTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(payments.created) != 0 {
 		t.Fatalf("duplicate transaction was created: %#v", payments.created)
+	}
+}
+
+func TestPaymentMatcherRecordsCashPayment(t *testing.T) {
+	payments := &fakePayments{existing: map[string]bool{}}
+	matcher := newMatcher([]domain.Student{testStudent(1, "Петренко Іван")}, []domain.Collection{testCollection(2, 10000)}, payments)
+
+	if err := matcher.RecordCash(context.Background(), 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if len(payments.created) != 1 {
+		t.Fatalf("expected one cash payment, got %d", len(payments.created))
+	}
+	payment := payments.created[0]
+	if payment.MatchMethod != "manual_cash" || payment.Amount != 10000 {
+		t.Fatalf("unexpected cash payment: %#v", payment)
 	}
 }

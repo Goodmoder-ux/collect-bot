@@ -70,6 +70,7 @@ type StudentRepository interface {
 }
 
 type CollectionRepository interface {
+	GetByID(ctx context.Context, id int64) (Collection, error)
 	ListActive(ctx context.Context) ([]Collection, error)
 	CloseIfAllStudentsPaid(ctx context.Context, collectionID int64) (bool, error)
 	// Create adds an active collection.
@@ -85,6 +86,7 @@ type PaymentRepository interface {
 	GetByID(ctx context.Context, id int64) (Payment, error)
 	// ListUnmatched returns payments requiring administrator review.
 	ListUnmatched(ctx context.Context) ([]Payment, error)
+	ListForCollection(ctx context.Context, collectionID int64) ([]Payment, error)
 	Create(ctx context.Context, payment Payment) error
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
 }

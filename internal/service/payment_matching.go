@@ -93,6 +93,7 @@ func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID
 	if _, err := m.students.GetByID(ctx, studentID); err != nil {
 		return fmt.Errorf("validate student %d: %w", studentID, err)
 	}
+
 	collections, err := m.collections.ListActive(ctx)
 	if err != nil {
 		return fmt.Errorf("validate collection %d: %w", collectionID, err)
@@ -112,6 +113,49 @@ func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID
 	}
 	if _, err := m.collections.CloseIfAllStudentsPaid(ctx, collectionID); err != nil {
 		return fmt.Errorf("auto-close collection %d after manual match: %w", collectionID, err)
+	}
+	return nil
+}
+
+func (m *PaymentMatcher) RecordCash(ctx context.Context, studentID, collectionID int64) error {
+	student, err := m.students.GetByID(ctx, studentID)
+	if err != nil {
+		return fmt.Errorf("validate cash payment student %d: %w", studentID, err)
+	}
+	collections, err := m.collections.ListActive(ctx)
+	if err != nil {
+		return fmt.Errorf("validate cash payment collection %d: %w", collectionID, err)
+	}
+	var collection domain.Collection
+	found := false
+	for _, item := range collections {
+		if item.ID == collectionID {
+			collection = item
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("collection %d is not active", collectionID)
+	}
+	paid, err := m.payments.ExistsForStudentCollection(ctx, studentID, collectionID)
+	if err != nil {
+		return fmt.Errorf("check existing cash payment: %w", err)
+	}
+	if paid {
+		return fmt.Errorf("student %d already paid collection %d", studentID, collectionID)
+	}
+	now := m.now()
+	if err := m.payments.Create(ctx, domain.Payment{
+		MonoTxID: fmt.Sprintf("cash-%d-%d-%d", collectionID, studentID, now.UnixNano()),
+		Amount:   collection.Amount, CommentRaw: "Готівковий платіж",
+		ReceivedAt: now, StudentID: &student.ID, CollectionID: &collection.ID,
+		MatchMethod: "manual_cash", MatchedAt: now,
+	}); err != nil {
+		return fmt.Errorf("record cash payment: %w", err)
+	}
+	if _, err := m.collections.CloseIfAllStudentsPaid(ctx, collectionID); err != nil {
+		return fmt.Errorf("auto-close collection after cash payment: %w", err)
 	}
 	return nil
 }

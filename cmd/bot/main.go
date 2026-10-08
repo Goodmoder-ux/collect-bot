@@ -51,10 +51,10 @@ func run() error {
 		return err
 	}
 	bot.RegisterRegistrationHandlers()
-	bot.RegisterAdminStudentHandlers(collections, payments, reports, cfg.JarURL)
 	notifier := telegram.NewNotifier(bot)
 	reminder := service.NewReminderScheduler(students, collections, payments, reminders, notifier)
 	deadlines := service.NewDeadlineChecker(collections, notifier, cfg.AdminTelegramID)
+	bot.RegisterAdminStudentHandlers(collections, payments, reports, reminder, cfg.JarURL)
 
 	errs := make(chan error, 3)
 	go func() {

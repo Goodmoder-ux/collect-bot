@@ -35,44 +35,64 @@ func NewReminderScheduler(
 }
 
 func (s *ReminderScheduler) SendDebtorReminders(ctx context.Context) error {
-	now := s.now()
 	collections, err := s.collections.ListActive(ctx)
 	if err != nil {
 		return fmt.Errorf("list collections for reminders: %w", err)
+	}
+	for _, collection := range collections {
+		if err := s.sendForCollection(ctx, collection, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ReminderScheduler) SendDebtorReminderForCollection(ctx context.Context, collectionID int64) error {
+	collections, err := s.collections.ListActive(ctx)
+	if err != nil {
+		return fmt.Errorf("list collection for reminder: %w", err)
+	}
+	for _, collection := range collections {
+		if collection.ID == collectionID {
+			return s.sendForCollection(ctx, collection, false)
+		}
+	}
+	return fmt.Errorf("collection %d is not active", collectionID)
+}
+
+func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection domain.Collection, enforceAge bool) error {
+	now := s.now()
+	if enforceAge && collection.CreatedAt.After(now.Add(-24*time.Hour)) {
+		return nil
 	}
 	students, err := s.students.ListRegistered(ctx)
 	if err != nil {
 		return fmt.Errorf("list students for reminders: %w", err)
 	}
-	for _, collection := range collections {
-		if collection.CreatedAt.After(now.Add(-24 * time.Hour)) {
+	for _, student := range students {
+		if student.TelegramID == nil {
 			continue
 		}
-		for _, student := range students {
-			if student.TelegramID == nil {
-				continue
-			}
-			paid, err := s.payments.ExistsForStudentCollection(ctx, student.ID, collection.ID)
-			if err != nil {
-				return fmt.Errorf("check debtor status for collection %d student %d: %w", collection.ID, student.ID, err)
-			}
-			if paid {
-				continue
-			}
-			lastSent, err := s.state.GetLastSent(ctx, collection.ID, student.ID)
-			if err != nil {
-				return fmt.Errorf("get reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
-			}
-			if !lastSent.IsZero() && now.Sub(lastSent) < 24*time.Hour {
-				continue
-			}
-			text := fmt.Sprintf("Нагадування: збір «%s» очікує вашу оплату. Сума: %d коп.", collection.Title, collection.Amount)
-			if err := s.notifier.Send(ctx, *student.TelegramID, text); err != nil {
-				return fmt.Errorf("send reminder to student %d: %w", student.ID, err)
-			}
-			if err := s.state.SetLastSent(ctx, collection.ID, student.ID, now); err != nil {
-				return fmt.Errorf("save reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
-			}
+		paid, err := s.payments.ExistsForStudentCollection(ctx, student.ID, collection.ID)
+		if err != nil {
+			return fmt.Errorf("check debtor status for collection %d student %d: %w", collection.ID, student.ID, err)
+		}
+		if paid {
+			continue
+		}
+		lastSent, err := s.state.GetLastSent(ctx, collection.ID, student.ID)
+		if err != nil {
+			return fmt.Errorf("get reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
+		}
+		if !lastSent.IsZero() && now.Sub(lastSent) < 24*time.Hour {
+			continue
+		}
+		text := fmt.Sprintf("Нагадування: збір «%s» очікує вашу оплату. Сума: %d коп.", collection.Title, collection.Amount)
+		if err := s.notifier.Send(ctx, *student.TelegramID, text); err != nil {
+			return fmt.Errorf("send reminder to student %d: %w", student.ID, err)
+		}
+		if err := s.state.SetLastSent(ctx, collection.ID, student.ID, now); err != nil {
+			return fmt.Errorf("save reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
 		}
 	}
 	return nil

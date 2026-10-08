@@ -16,6 +16,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	collections domain.CollectionRepository,
 	payments domain.PaymentRepository,
 	reports domain.AdminReportRepository,
+	reminders *service.ReminderScheduler,
 	jarURL string,
 ) {
 	collectionWizard := newCollectionWizard(collections, b.adminID)
@@ -26,6 +27,22 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	b.Client.Handle(&telebot.Btn{Unique: "collection_cancel"}, b.RequireAdmin(collectionWizard.confirmCallback))
 	b.Client.Handle("/collections", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
+	}))
+	b.Client.Handle("/status", b.RequireAdmin(func(c telebot.Context) error {
+		return b.showCollectionStatus(c, collections, payments)
+	}))
+	b.Client.Handle("/export", b.RequireAdmin(func(c telebot.Context) error {
+		return b.exportCollection(c, collections, payments)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "collection_status"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return b.sendCollectionStatus(c, id, collections, payments)
 	}))
 	b.Client.Handle("/payments", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
@@ -54,6 +71,36 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		}
 		return c.Edit("Прив'язку платежу скасовано.")
 	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_remind"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid reminder collection ID: %w", err)
+		}
+		if err := reminders.SendDebtorReminderForCollection(context.Background(), id); err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Нагадування боржникам надіслано.")
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_close"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid close collection ID: %w", err)
+		}
+		if err := collections.CloseManually(context.Background(), id); err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Збір закрито.")
+	}))
+	cashWorkflow := cashPaymentWorkflow{students: b.students, collections: collections, payments: payments}
+	b.Client.Handle(&telebot.Btn{Unique: "status_cash"}, b.RequireAdmin(cashWorkflow.chooseStudent))
+	b.Client.Handle(&telebot.Btn{Unique: "cash_student"}, b.RequireAdmin(cashWorkflow.chooseCollection))
+	b.Client.Handle(&telebot.Btn{Unique: "cash_collection"}, b.RequireAdmin(cashWorkflow.execute))
 	b.Client.Handle("/match", b.RequireAdmin(func(c telebot.Context) error {
 		return manuallyMatch(c, b, payments, collections)
 	}))
@@ -114,6 +161,19 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 		}
 		fmt.Fprintf(&builder, "• %s — %d коп., дедлайн %s — %s\n",
 			collection.Title, collection.Amount, collection.DeadlineAt.Format("02.01.2006 15:04"), status)
+		if isAdmin {
+			markup := &telebot.ReplyMarkup{}
+			markup.Inline(markup.Row(telebot.Btn{
+				Unique: "collection_status", Text: "📊 Деталі платежів", Data: strconv.FormatInt(collection.ID, 10),
+			}))
+			if err := c.Send(fmt.Sprintf("• %s — %d коп., дедлайн %s — %s", collection.Title, collection.Amount,
+				collection.DeadlineAt.Format("02.01.2006 15:04"), status), markup); err != nil {
+				return err
+			}
+		}
+	}
+	if isAdmin {
+		return nil
 	}
 	return c.Send(builder.String())
 }

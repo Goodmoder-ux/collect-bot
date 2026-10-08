@@ -26,20 +26,24 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	dbPath := strings.TrimSpace(os.Getenv("DB_PATH"))
+	if dbPath == "" {
+		dbPath = strings.TrimSpace(os.Getenv("SQLITE_DB_PATH"))
+	}
 	cfg := Config{
 		TelegramToken:   os.Getenv("TELEGRAM_TOKEN"),
 		MonobankToken:   os.Getenv("MONOBANK_TOKEN"),
 		JarAccountID:    os.Getenv("JAR_ACCOUNT_ID"),
 		JarURL:          os.Getenv("JAR_URL"),
 		AdminTelegramID: adminID,
-		SQLiteDBPath:    os.Getenv("SQLITE_DB_PATH"),
+		SQLiteDBPath:    dbPath,
 	}
 	for name, value := range map[string]string{
 		"TELEGRAM_TOKEN": cfg.TelegramToken,
 		"MONOBANK_TOKEN": cfg.MonobankToken,
 		"JAR_ACCOUNT_ID": cfg.JarAccountID,
 		"JAR_URL":        cfg.JarURL,
-		"SQLITE_DB_PATH": cfg.SQLiteDBPath,
+		"DB_PATH":        cfg.SQLiteDBPath,
 	} {
 		if strings.TrimSpace(value) == "" {
 			return Config{}, fmt.Errorf("config: %s is required", name)

@@ -1,6 +1,10 @@
 package telegram
 
-import "testing"
+import (
+	"testing"
+
+	"gopkg.in/telebot.v3"
+)
 
 func TestParseHryvnia(t *testing.T) {
 	tests := []struct {
@@ -30,5 +34,34 @@ func TestParseHryvniaRejectsInvalidAmounts(t *testing.T) {
 		if _, err := parseHryvnia(input); err == nil {
 			t.Fatalf("parseHryvnia(%q) succeeded, want error", input)
 		}
+	}
+}
+
+func TestTelegramDisplayName(t *testing.T) {
+	tests := []struct {
+		name     string
+		user     *telebot.User
+		expected string
+	}{
+		{name: "full name", user: &telebot.User{FirstName: "Іван", LastName: "Петренко"}, expected: "Іван Петренко"},
+		{name: "first name only", user: &telebot.User{FirstName: "Іван"}, expected: "Іван"},
+		{name: "missing name", user: &telebot.User{}, expected: "не вказано"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := telegramDisplayName(test.user); got != test.expected {
+				t.Fatalf("telegramDisplayName() = %q, want %q", got, test.expected)
+			}
+		})
+	}
+}
+
+func TestTelegramUsername(t *testing.T) {
+	if got := telegramUsername(&telebot.User{Username: "ivan"}); got != "@ivan" {
+		t.Fatalf("telegramUsername() = %q, want %q", got, "@ivan")
+	}
+	if got := telegramUsername(&telebot.User{}); got != "відсутній" {
+		t.Fatalf("telegramUsername() = %q, want %q", got, "відсутній")
 	}
 }

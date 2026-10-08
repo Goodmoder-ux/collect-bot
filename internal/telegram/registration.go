@@ -62,16 +62,43 @@ func (b *Bot) handleSelection(c telebot.Context) error {
 		return fmt.Errorf("registration: answer selection callback: %w", err)
 	}
 	approval := &telebot.ReplyMarkup{}
-	approval.Inline(approval.Row(
-		telebot.Btn{Unique: "approve_registration", Text: "✅ Approve", Data: strconv.FormatInt(studentID, 10)},
-		telebot.Btn{Unique: "reject_registration", Text: "❌ Reject", Data: strconv.FormatInt(studentID, 10)},
-	))
+	approval.Inline(
+		approval.Row(
+			telebot.Btn{Unique: "approve_registration", Text: "✅ Підтвердити", Data: strconv.FormatInt(studentID, 10)},
+			telebot.Btn{Unique: "reject_registration", Text: "❌ Відхилити", Data: strconv.FormatInt(studentID, 10)},
+		),
+		approval.Row(telebot.Btn{
+			Text: "👤 Відкрити профіль",
+			URL:  fmt.Sprintf("tg://user?id=%d", c.Sender().ID),
+		}),
+	)
 	admin := &telebot.User{ID: b.adminID}
-	text := fmt.Sprintf("📩 Запит на реєстрацію\nСтудент: %s\nTelegram ID: %d", student.FullName, c.Sender().ID)
+	text := fmt.Sprintf(
+		"📩 Запит на реєстрацію\n\nСтудент у списку: %s\nTelegram-профіль: %s\nUsername: %s\nTelegram ID: %d",
+		student.FullName,
+		telegramDisplayName(c.Sender()),
+		telegramUsername(c.Sender()),
+		c.Sender().ID,
+	)
 	if _, err := b.Client.Send(admin, text, approval); err != nil {
 		return fmt.Errorf("registration: notify admin: %w", err)
 	}
 	return c.Edit("Запит на реєстрацію надіслано адміністратору.")
+}
+
+func telegramDisplayName(user *telebot.User) string {
+	name := strings.TrimSpace(strings.Join([]string{user.FirstName, user.LastName}, " "))
+	if name == "" {
+		return "не вказано"
+	}
+	return name
+}
+
+func telegramUsername(user *telebot.User) string {
+	if user.Username == "" {
+		return "відсутній"
+	}
+	return "@" + user.Username
 }
 
 func (b *Bot) handleApproval(approve bool) telebot.HandlerFunc {

@@ -62,16 +62,19 @@ func (r *CollectionRepository) CloseIfAllStudentsPaid(ctx context.Context, colle
 func scanCollection(row rowScanner) (domain.Collection, error) {
 	var collection domain.Collection
 	var closedReason sql.NullString
-	var closedAt sql.NullTime
-	if err := row.Scan(&collection.ID, &collection.Title, &collection.Amount, &collection.DeadlineAt,
-		&collection.Status, &closedReason, &collection.CreatedAt, &closedAt); err != nil {
+	var deadlineAt, createdAt, closedAt sqliteTime
+	if err := row.Scan(&collection.ID, &collection.Title, &collection.Amount, &deadlineAt,
+		&collection.Status, &closedReason, &createdAt, &closedAt); err != nil {
 		return domain.Collection{}, err
 	}
+	collection.DeadlineAt = deadlineAt.Time
+	collection.CreatedAt = createdAt.Time
 	if closedReason.Valid {
 		collection.ClosedReason = &closedReason.String
 	}
-	if closedAt.Valid {
-		collection.ClosedAt = &closedAt.Time
+	if closedAt.valid {
+		closed := closedAt.Time
+		collection.ClosedAt = &closed
 	}
 	return collection, nil
 }

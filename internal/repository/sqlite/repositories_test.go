@@ -35,6 +35,7 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	studentIDValue, err := studentID.LastInsertId()
 	if err != nil {
 		t.Fatal(err)
@@ -103,5 +104,53 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	}
 	if err := collections.CloseManually(ctx, collectionID); err == nil {
 		t.Fatal("expected manual close of closed collection to fail")
+	}
+}
+
+func TestCollectionRepositoryReadsSQLiteTextTimestamps(t *testing.T) {
+	ctx := context.Background()
+	db := repositoryTestDB(t)
+	repository := NewCollectionRepository(db)
+
+	_, err := db.Exec(`INSERT INTO collections
+		(title, amount, deadline_at, status, created_at)
+		VALUES (?, ?, ?, 'active', ?)`,
+		"Текстова дата", 10000, "2026-10-08 12:00:00", "2026-10-08 10:00:00")
+	if err != nil {
+		t.Fatalf("insert text timestamps: %v", err)
+	}
+
+	collections, err := repository.ListActive(ctx)
+	if err != nil {
+		t.Fatalf("list collection with text timestamps: %v", err)
+	}
+	if len(collections) != 1 {
+		t.Fatalf("expected one collection, got %d", len(collections))
+	}
+	if collections[0].DeadlineAt.IsZero() || collections[0].CreatedAt.IsZero() {
+		t.Fatalf("expected parsed timestamps, got deadline=%v created=%v",
+			collections[0].DeadlineAt, collections[0].CreatedAt)
+	}
+}
+
+func TestCollectionRepositoryReadsSQLiteGoTimestamp(t *testing.T) {
+	ctx := context.Background()
+	db := repositoryTestDB(t)
+	repository := NewCollectionRepository(db)
+
+	_, err := db.Exec(`INSERT INTO collections
+		(title, amount, deadline_at, status, created_at)
+		VALUES (?, ?, ?, 'active', ?)`,
+		"Go timestamp", 10000, "2026-12-31 23:59:00 +0300 +0300", "2026-10-08 10:00:00")
+	if err != nil {
+		t.Fatalf("insert Go timestamp: %v", err)
+	}
+
+	collections, err := repository.ListActive(ctx)
+	if err != nil {
+		t.Fatalf("list collection with Go timestamp: %v", err)
+	}
+	if len(collections) != 1 || collections[0].DeadlineAt.IsZero() {
+		t.Fatalf("expected parsed Go timestamp, got %#v", collections)
 	}
 }

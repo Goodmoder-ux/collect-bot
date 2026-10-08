@@ -16,7 +16,7 @@ func NewReminderRepository(db *sql.DB) *ReminderRepository { return &ReminderRep
 var _ domain.ReminderRepository = (*ReminderRepository)(nil)
 
 func (r *ReminderRepository) GetLastSent(ctx context.Context, collectionID, studentID int64) (time.Time, error) {
-	var sentAt time.Time
+	var sentAt sqliteTime
 	err := r.db.QueryRowContext(ctx, `SELECT last_sent_at FROM reminder_state WHERE collection_id = ? AND student_id = ?`,
 		collectionID, studentID).Scan(&sentAt)
 	if err != nil {
@@ -25,7 +25,7 @@ func (r *ReminderRepository) GetLastSent(ctx context.Context, collectionID, stud
 		}
 		return time.Time{}, fmt.Errorf("get reminder state for collection %d student %d: %w", collectionID, studentID, err)
 	}
-	return sentAt, nil
+	return sentAt.Time, nil
 }
 
 func (r *ReminderRepository) SetLastSent(ctx context.Context, collectionID, studentID int64, sentAt time.Time) error {

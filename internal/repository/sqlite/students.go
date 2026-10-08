@@ -83,9 +83,11 @@ type rowScanner interface{ Scan(...any) error }
 func scanStudent(row rowScanner) (domain.Student, error) {
 	var student domain.Student
 	var telegramID sql.NullInt64
-	if err := row.Scan(&student.ID, &telegramID, &student.FullName, &student.Role, &student.CreatedAt); err != nil {
+	var createdAt sqliteTime
+	if err := row.Scan(&student.ID, &telegramID, &student.FullName, &student.Role, &createdAt); err != nil {
 		return domain.Student{}, err
 	}
+	student.CreatedAt = createdAt.Time
 	if telegramID.Valid {
 		student.TelegramID = &telegramID.Int64
 	}

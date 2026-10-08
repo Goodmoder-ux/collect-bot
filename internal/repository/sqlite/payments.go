@@ -107,10 +107,13 @@ func scanPayment(row rowScanner) (domain.Payment, error) {
 	var payment domain.Payment
 	var comment sql.NullString
 	var studentID, collectionID sql.NullInt64
-	if err := row.Scan(&payment.ID, &payment.MonoTxID, &payment.Amount, &comment, &payment.ReceivedAt,
-		&studentID, &collectionID, &payment.MatchMethod, &payment.MatchedAt); err != nil {
+	var receivedAt, matchedAt sqliteTime
+	if err := row.Scan(&payment.ID, &payment.MonoTxID, &payment.Amount, &comment, &receivedAt,
+		&studentID, &collectionID, &payment.MatchMethod, &matchedAt); err != nil {
 		return domain.Payment{}, err
 	}
+	payment.ReceivedAt = receivedAt.Time
+	payment.MatchedAt = matchedAt.Time
 	if comment.Valid {
 		payment.CommentRaw = comment.String
 	}

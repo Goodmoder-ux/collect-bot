@@ -12,12 +12,20 @@ import (
 
 func (b *Bot) listStudents(c telebot.Context) error {
 	query := strings.TrimSpace(strings.TrimPrefix(c.Text(), "/students"))
+	return b.renderStudentList(c, query, false)
+}
+
+func (b *Bot) renderStudentList(c telebot.Context, query string, edit bool) error {
 	students, err := b.students.Search(context.Background(), query)
 	if err != nil {
 		return fmt.Errorf("students: search: %w", err)
 	}
 	if len(students) == 0 {
-		return c.Send("Студентів за цим запитом не знайдено.")
+		message := "Студентів за цим запитом не знайдено."
+		if edit {
+			return c.Edit(message)
+		}
+		return c.Send(message)
 	}
 	markup := &telebot.ReplyMarkup{}
 	rows := make([]telebot.Row, 0, len(students)+1)
@@ -36,6 +44,9 @@ func (b *Bot) listStudents(c telebot.Context) error {
 	title := "👥 Студенти\nОберіть студента для перегляду профілю."
 	if query != "" {
 		title = fmt.Sprintf("👥 Результати пошуку: %s", query)
+	}
+	if edit {
+		return c.Edit(title, markup)
 	}
 	return c.Send(title, markup)
 }

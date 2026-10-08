@@ -38,7 +38,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return b.listStudents(c)
+		return b.renderStudentList(c, "", true)
 	}))
 	b.Client.Handle(&telebot.Btn{Unique: "admin_students_help"}, b.RequireAdmin(func(c telebot.Context) error {
 		if err := c.Respond(); err != nil {

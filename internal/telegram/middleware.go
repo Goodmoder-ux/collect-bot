@@ -54,7 +54,7 @@ func StudentFromContext(c telebot.Context) (domain.Student, bool) {
 
 func (b *Bot) reject(c telebot.Context) error {
 	if c.Sender() != nil {
-		_ = c.Send("Доступ заборонено.")
+		_ = c.Send("Доступ заборонено.\nДля реєстрації скористайтеся командою /start.")
 	}
 	return fmt.Errorf("%w", ErrUnauthorized)
 }

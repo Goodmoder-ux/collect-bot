@@ -52,7 +52,7 @@ func run() error {
 	}
 	bot.RegisterRegistrationHandlers()
 	notifier := telegram.NewNotifier(bot)
-	reminder := service.NewReminderScheduler(students, collections, payments, reminders, notifier)
+	reminder := service.NewReminderScheduler(students, collections, payments, reminders, notifier, cfg.JarURL)
 	deadlines := service.NewDeadlineChecker(collections, notifier, cfg.AdminTelegramID)
 	bot.RegisterAdminStudentHandlers(collections, payments, reports, reminder, cfg.JarURL)
 

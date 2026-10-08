@@ -40,7 +40,7 @@ func (b *Bot) handleStart(c telebot.Context) error {
 		rows = append(rows, markup.Row(button))
 	}
 	markup.Inline(rows...)
-	return c.Send("Оберіть своє ім'я зі списку:", markup)
+	return c.Send("Оберіть своє ПІБ зі списку.\nЯкщо вашого імені немає, зверніться до адміністратора.", markup)
 }
 
 func (b *Bot) handleSelection(c telebot.Context) error {

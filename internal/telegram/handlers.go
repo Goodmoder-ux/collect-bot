@@ -21,6 +21,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 ) {
 	collectionWizard := newCollectionWizard(collections, b.adminID)
 	b.Client.Handle("/newcollection", b.RequireAdmin(collectionWizard.start))
+	b.Client.Handle("/cancel", b.RequireAdmin(collectionWizard.cancel))
 	b.Client.Handle(telebot.OnText, collectionWizard.text)
 	b.Client.Handle(&telebot.Btn{Unique: "collection_deadline"}, b.RequireAdmin(collectionWizard.deadline))
 	b.Client.Handle(&telebot.Btn{Unique: "collection_confirm"}, b.RequireAdmin(collectionWizard.confirmCallback))
@@ -50,7 +51,14 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	b.Client.Handle("/jar", b.RequireStudent(func(c telebot.Context) error {
 		markup := &telebot.ReplyMarkup{}
 		markup.Inline(markup.Row(telebot.Btn{Text: "💳 Відкрити банку в Monobank", URL: jarURL}))
-		return c.Send("Поповніть банку Monobank.\nУ коментарі обов'язково вкажіть своє українське прізвище.", markup)
+		return c.Send(
+			"💳 Оплата через Monobank\n\n"+
+				"1. Відкрийте банку за кнопкою нижче.\n"+
+				"2. Вкажіть суму збору.\n"+
+				"3. У коментарі до платежу напишіть своє українське прізвище.\n\n"+
+				"Після переказу платіж буде перевірено автоматично.",
+			markup,
+		)
 	}))
 	b.Client.Handle("/closecollection", b.RequireAdmin(func(c telebot.Context) error {
 		return closeCollection(c, collections)
@@ -144,7 +152,7 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 		return fmt.Errorf("list collections: %w", err)
 	}
 	if len(active) == 0 {
-		return c.Send("Активних зборів немає.")
+		return c.Send("Активних зборів зараз немає.\nКоли з'явиться новий збір, він буде доступний у цьому меню.")
 	}
 	var builder strings.Builder
 	for _, collection := range active {
@@ -198,8 +206,10 @@ func listUnmatched(c telebot.Context, payments domain.PaymentRepository) error {
 		return c.Send("Нерозпізнаних платежів немає.")
 	}
 	var builder strings.Builder
+	builder.WriteString("⚠️ Нерозпізнані платежі\n\n")
 	for _, payment := range items {
-		fmt.Fprintf(&builder, "#%d: %s — %s\n", payment.ID, formatMoney(payment.Amount), payment.CommentRaw)
+		fmt.Fprintf(&builder, "Платіж #%d\nСума: %s\nКоментар: %s\nОтримано: %s\n\n",
+			payment.ID, formatMoney(payment.Amount), payment.CommentRaw, payment.ReceivedAt.Format("02.01.2006 15:04"))
 	}
 	return c.Send(builder.String())
 }

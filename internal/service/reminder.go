@@ -18,6 +18,7 @@ type ReminderScheduler struct {
 	payments    domain.PaymentRepository
 	state       domain.ReminderRepository
 	notifier    Notifier
+	jarURL      string
 	now         func() time.Time
 }
 
@@ -27,10 +28,15 @@ func NewReminderScheduler(
 	payments domain.PaymentRepository,
 	state domain.ReminderRepository,
 	notifier Notifier,
+	jarURL ...string,
 ) *ReminderScheduler {
+	publicJarURL := ""
+	if len(jarURL) > 0 {
+		publicJarURL = jarURL[0]
+	}
 	return &ReminderScheduler{
 		students: students, collections: collections, payments: payments,
-		state: state, notifier: notifier, now: time.Now,
+		state: state, notifier: notifier, jarURL: publicJarURL, now: time.Now,
 	}
 }
 
@@ -87,15 +93,28 @@ func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection do
 		if !lastSent.IsZero() && now.Sub(lastSent) < 24*time.Hour {
 			continue
 		}
-		text := fmt.Sprintf("Нагадування: збір «%s» очікує вашу оплату. Сума: %d.%02d грн.", collection.Title, collection.Amount/100, collection.Amount%100)
+		text := fmt.Sprintf(
+			"🔔 Нагадування: збір «%s» очікує вашу оплату.\nСума: %d.%02d грн.\n\n"+
+				"💳 Для оплати відкрийте банку Monobank: /jar\n%s",
+			collection.Title, collection.Amount/100, collection.Amount%100,
+			jarURLText(s.jarURL),
+		)
 		if err := s.notifier.Send(ctx, *student.TelegramID, text); err != nil {
 			return fmt.Errorf("send reminder to student %d: %w", student.ID, err)
 		}
+
 		if err := s.state.SetLastSent(ctx, collection.ID, student.ID, now); err != nil {
 			return fmt.Errorf("save reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
 		}
 	}
 	return nil
+}
+
+func jarURLText(url string) string {
+	if url == "" {
+		return "Відкрийте меню та оберіть /jar."
+	}
+	return url
 }
 
 type DeadlineChecker struct {

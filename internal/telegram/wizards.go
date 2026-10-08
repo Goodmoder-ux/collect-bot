@@ -47,7 +47,21 @@ func (w *collectionWizard) start(c telebot.Context) error {
 	w.mu.Lock()
 	w.state[c.Sender().ID] = collectionWizardState{step: collectionWizardTitle}
 	w.mu.Unlock()
-	return c.Send("Введіть назву збору:")
+	return c.Send("Крок 1/3. Введіть назву збору:")
+}
+
+func (w *collectionWizard) cancel(c telebot.Context) error {
+	if c.Sender() == nil {
+		return fmt.Errorf("collection wizard: missing sender")
+	}
+	w.mu.Lock()
+	_, ok := w.state[c.Sender().ID]
+	delete(w.state, c.Sender().ID)
+	w.mu.Unlock()
+	if !ok {
+		return c.Send("Немає активної операції для скасування.")
+	}
+	return c.Send("Створення збору скасовано.")
 }
 
 func (w *collectionWizard) text(c telebot.Context) error {
@@ -65,14 +79,14 @@ func (w *collectionWizard) text(c telebot.Context) error {
 	}
 	value := strings.TrimSpace(c.Text())
 	if value == "" {
-		return c.Send("Значення не може бути порожнім. Спробуйте ще раз:")
+		return c.Send("Значення не може бути порожнім. Спробуйте ще раз або скасуйте операцію командою /cancel:")
 	}
 	switch state.step {
 	case collectionWizardTitle:
 		state.title = value
 		state.step = collectionWizardAmount
 		w.save(c.Sender().ID, state)
-		return c.Send("Введіть суму в гривнях (наприклад, 100):")
+		return c.Send("Крок 2/3. Введіть суму в гривнях (наприклад, 100 або 100.50):")
 	case collectionWizardAmount:
 		amount, err := parseHryvnia(value)
 		if err != nil {
@@ -81,7 +95,7 @@ func (w *collectionWizard) text(c telebot.Context) error {
 		state.amount = amount
 		state.step = collectionWizardDate
 		w.save(c.Sender().ID, state)
-		return c.Send("Оберіть дедлайн:", collectionDeadlineMarkup())
+		return c.Send("Крок 3/3. Оберіть дедлайн:", collectionDeadlineMarkup())
 	case collectionWizardDate:
 		deadline, err := time.ParseInLocation("2006-01-02", value, time.Local)
 		if err != nil {
@@ -115,7 +129,7 @@ func (w *collectionWizard) deadline(c telebot.Context) error {
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return c.Send("Введіть власну дату у форматі YYYY-MM-DD:")
+		return c.Send("Введіть власну дату у форматі YYYY-MM-DD.\nНаприклад: 2026-12-31")
 	default:
 		return fmt.Errorf("collection wizard: unknown deadline option %q", c.Data())
 	}

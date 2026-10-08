@@ -41,6 +41,7 @@ func (b *Bot) setCommands() error {
 	adminCommands := append([]telebot.Command{}, studentCommands...)
 	adminCommands = append(adminCommands,
 		telebot.Command{Text: "newcollection", Description: "Створити збір"},
+		telebot.Command{Text: "cancel", Description: "Скасувати поточну дію"},
 		telebot.Command{Text: "status", Description: "Деталі збору"},
 		telebot.Command{Text: "export", Description: "Експорт платежів CSV"},
 		telebot.Command{Text: "unmatched", Description: "Нерозпізнані платежі"},

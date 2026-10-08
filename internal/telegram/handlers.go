@@ -118,9 +118,9 @@ func createCollection(c telebot.Context, collections domain.CollectionRepository
 	if len(fields) != 3 {
 		return c.Send("Формат: /newcollection Назва|сума_в_гривнях|дедлайн_RFC3339")
 	}
-	amount, err := strconv.ParseInt(strings.TrimSpace(fields[1]), 10, 64)
-	if err != nil || amount <= 0 {
-		return fmt.Errorf("invalid collection amount: %w", err)
+	amount, err := parseHryvnia(strings.TrimSpace(fields[1]))
+	if err != nil {
+		return fmt.Errorf("invalid collection amount in hryvnias: %w", err)
 	}
 	deadline, err := time.Parse(time.RFC3339, strings.TrimSpace(fields[2]))
 	if err != nil {

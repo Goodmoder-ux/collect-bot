@@ -18,3 +18,9 @@ func TestFormatMoney(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatMoneyValue(t *testing.T) {
+	if got := formatMoneyValue(10050); got != "100.50" {
+		t.Fatalf("formatMoneyValue(10050) = %q, want %q", got, "100.50")
+	}
+}

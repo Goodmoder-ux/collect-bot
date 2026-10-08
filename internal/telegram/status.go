@@ -204,7 +204,7 @@ func (b *Bot) exportCollection(c telebot.Context, collections domain.CollectionR
 	}
 	for _, student := range students {
 		payment, ok := byStudent[student.ID]
-		row := []string{student.FullName, "Unpaid", formatMoney(collection.Amount), "", ""}
+		row := []string{student.FullName, "Unpaid", formatMoneyValue(collection.Amount), "", ""}
 		if ok {
 			row[1] = "Paid"
 			row[3] = paymentMethodLabel(payment.MatchMethod)

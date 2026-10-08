@@ -154,3 +154,35 @@ func TestCollectionRepositoryReadsSQLiteGoTimestamp(t *testing.T) {
 		t.Fatalf("expected parsed Go timestamp, got %#v", collections)
 	}
 }
+
+func TestStudentRepositoryPersistsPendingRegistration(t *testing.T) {
+	ctx := context.Background()
+	db := repositoryTestDB(t)
+	repository := NewStudentRepository(db)
+
+	result, err := db.Exec(`INSERT INTO students(full_name, role) VALUES ('Шевченко Олена', 'student')`)
+	if err != nil {
+		t.Fatalf("insert student: %v", err)
+	}
+	studentID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("get student ID: %v", err)
+	}
+
+	if err := repository.CreatePendingRegistration(ctx, 12345, studentID, "olena"); err != nil {
+		t.Fatalf("create pending registration: %v", err)
+	}
+	pending, err := repository.GetPendingRegistrationByStudentID(ctx, studentID)
+	if err != nil {
+		t.Fatalf("get pending registration: %v", err)
+	}
+	if pending.TelegramID != 12345 || pending.StudentID != studentID || pending.Username != "olena" {
+		t.Fatalf("unexpected pending registration: %#v", pending)
+	}
+	if err := repository.DeletePendingRegistration(ctx, studentID); err != nil {
+		t.Fatalf("delete pending registration: %v", err)
+	}
+	if _, err := repository.GetPendingRegistrationByStudentID(ctx, studentID); err == nil {
+		t.Fatal("expected deleted pending registration to be unavailable")
+	}
+}

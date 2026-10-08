@@ -51,7 +51,7 @@ func run() error {
 		return err
 	}
 	bot.RegisterRegistrationHandlers()
-	bot.RegisterAdminStudentHandlers(collections, payments, reports, cfg.JarAccountID)
+	bot.RegisterAdminStudentHandlers(collections, payments, reports, cfg.JarURL)
 	notifier := telegram.NewNotifier(bot)
 	reminder := service.NewReminderScheduler(students, collections, payments, reminders, notifier)
 	deadlines := service.NewDeadlineChecker(collections, notifier, cfg.AdminTelegramID)

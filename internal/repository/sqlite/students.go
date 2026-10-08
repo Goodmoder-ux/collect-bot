@@ -50,6 +50,51 @@ func (r *StudentRepository) SetTelegramID(ctx context.Context, studentID, telegr
 	return nil
 }
 
+func (r *StudentRepository) CreatePendingRegistration(ctx context.Context, telegramID, studentID int64, username string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin pending registration for Telegram ID %d: %w", telegramID, err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM pending_registrations WHERE student_id = ?`, studentID); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("replace pending registration for student %d: %w", studentID, err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO pending_registrations(telegram_id, student_id, username)
+		VALUES (?, ?, ?)
+		ON CONFLICT(telegram_id) DO UPDATE SET student_id = excluded.student_id,
+		username = excluded.username, requested_at = CURRENT_TIMESTAMP`,
+		telegramID, studentID, nullableString(username)); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("create pending registration for Telegram ID %d: %w", telegramID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit pending registration for Telegram ID %d: %w", telegramID, err)
+	}
+	return nil
+}
+
+func (r *StudentRepository) GetPendingRegistrationByStudentID(ctx context.Context, studentID int64) (domain.PendingRegistration, error) {
+	var pending domain.PendingRegistration
+	var username sql.NullString
+	var requestedAt sqliteTime
+	err := r.db.QueryRowContext(ctx, `SELECT id, telegram_id, student_id, username, requested_at
+		FROM pending_registrations WHERE student_id = ?`, studentID).
+		Scan(&pending.ID, &pending.TelegramID, &pending.StudentID, &username, &requestedAt)
+	if err != nil {
+		return domain.PendingRegistration{}, fmt.Errorf("get pending registration for student %d: %w", studentID, err)
+	}
+	pending.Username = username.String
+	pending.RequestedAt = requestedAt.Time
+	return pending, nil
+}
+
+func (r *StudentRepository) DeletePendingRegistration(ctx context.Context, studentID int64) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM pending_registrations WHERE student_id = ?`, studentID); err != nil {
+		return fmt.Errorf("delete pending registration for student %d: %w", studentID, err)
+	}
+	return nil
+}
+
 func (r *StudentRepository) ListUnregistered(ctx context.Context) ([]domain.Student, error) {
 	return r.list(ctx, `WHERE telegram_id IS NULL`)
 }
@@ -92,4 +137,11 @@ func scanStudent(row rowScanner) (domain.Student, error) {
 		student.TelegramID = &telegramID.Int64
 	}
 	return student, nil
+}
+
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

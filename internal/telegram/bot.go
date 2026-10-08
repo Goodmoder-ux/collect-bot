@@ -23,7 +23,35 @@ func NewBot(token string, adminID int64, students domain.StudentRepository) (*Bo
 	if err != nil {
 		return nil, fmt.Errorf("telegram: create bot: %w", err)
 	}
-	return &Bot{Client: client, students: students, adminID: adminID}, nil
+	bot := &Bot{Client: client, students: students, adminID: adminID}
+	if err := bot.setCommands(); err != nil {
+		return nil, err
+	}
+	return bot, nil
+}
+
+func (b *Bot) setCommands() error {
+	studentCommands := []telebot.Command{
+		{Text: "collections", Description: "Активні збори та статус"},
+		{Text: "jar", Description: "Реквізити банки Monobank"},
+	}
+	if err := b.Client.SetCommands(studentCommands); err != nil {
+		return fmt.Errorf("telegram: set student commands: %w", err)
+	}
+	adminCommands := append([]telebot.Command{}, studentCommands...)
+	adminCommands = append(adminCommands,
+		telebot.Command{Text: "newcollection", Description: "Створити збір"},
+		telebot.Command{Text: "unmatched", Description: "Нерозпізнані платежі"},
+		telebot.Command{Text: "report", Description: "Сформувати звіт"},
+		telebot.Command{Text: "closecollection", Description: "Закрити збір"},
+	)
+	if err := b.Client.SetCommands(adminCommands, telebot.CommandScope{
+		Type:   telebot.CommandScopeChat,
+		ChatID: b.adminID,
+	}); err != nil {
+		return fmt.Errorf("telegram: set admin commands: %w", err)
+	}
+	return nil
 }
 
 func (b *Bot) Start() {

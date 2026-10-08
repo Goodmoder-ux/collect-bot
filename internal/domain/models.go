@@ -13,6 +13,14 @@ type Student struct {
 	CreatedAt  time.Time
 }
 
+type PendingRegistration struct {
+	ID          int64
+	TelegramID  int64
+	StudentID   int64
+	Username    string
+	RequestedAt time.Time
+}
+
 type Collection struct {
 	ID           int64
 	Title        string
@@ -56,6 +64,9 @@ type StudentRepository interface {
 	ListRegistered(ctx context.Context) ([]Student, error)
 	// SetTelegramID links an unregistered student after admin approval.
 	SetTelegramID(ctx context.Context, studentID, telegramID int64) error
+	CreatePendingRegistration(ctx context.Context, telegramID, studentID int64, username string) error
+	GetPendingRegistrationByStudentID(ctx context.Context, studentID int64) (PendingRegistration, error)
+	DeletePendingRegistration(ctx context.Context, studentID int64) error
 }
 
 type CollectionRepository interface {

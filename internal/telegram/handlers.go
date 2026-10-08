@@ -28,7 +28,9 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		return showCollections(c, collections, payments)
 	}))
 	b.Client.Handle("/jar", b.RequireStudent(func(c telebot.Context) error {
-		return c.Send(fmt.Sprintf("Поповніть банку: %s\nУ коментарі обов'язково вкажіть своє українське прізвище.", jarURL))
+		markup := &telebot.ReplyMarkup{}
+		markup.Inline(markup.Row(telebot.Btn{Text: "💳 Відкрити банку в Monobank", URL: jarURL}))
+		return c.Send("Поповніть банку Monobank.\nУ коментарі обов'язково вкажіть своє українське прізвище.", markup)
 	}))
 	b.Client.Handle("/closecollection", b.RequireAdmin(func(c telebot.Context) error {
 		return closeCollection(c, collections)

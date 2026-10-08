@@ -44,6 +44,10 @@ func (f *fakeStudents) ListUnregistered(context.Context) ([]domain.Student, erro
 func (f *fakeStudents) ListRegistered(context.Context) ([]domain.Student, error) {
 	return f.students, nil
 }
+func (f *fakeStudents) Search(context.Context, string) ([]domain.Student, error) {
+	return f.students, nil
+}
+func (f *fakeStudents) UnlinkTelegramID(context.Context, int64) error { return nil }
 
 type fakeCollections struct {
 	collections []domain.Collection
@@ -87,6 +91,9 @@ func (f *fakePayments) GetByID(context.Context, int64) (domain.Payment, error) {
 }
 func (f *fakePayments) ListUnmatched(context.Context) ([]domain.Payment, error) { return nil, nil }
 func (f *fakePayments) ListForCollection(context.Context, int64) ([]domain.Payment, error) {
+	return nil, nil
+}
+func (f *fakePayments) ListForStudent(context.Context, int64) ([]domain.Payment, error) {
 	return nil, nil
 }
 func (f *fakePayments) Create(_ context.Context, payment domain.Payment) error {

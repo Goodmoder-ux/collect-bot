@@ -75,6 +75,7 @@ func (r *PaymentRepository) ListForCollection(ctx context.Context, collectionID 
 	if err != nil {
 		return nil, fmt.Errorf("list payments for collection %d: %w", collectionID, err)
 	}
+
 	defer rows.Close()
 	var result []domain.Payment
 	for rows.Next() {
@@ -86,6 +87,28 @@ func (r *PaymentRepository) ListForCollection(ctx context.Context, collectionID 
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate collection payments: %w", err)
+	}
+	return result, nil
+}
+
+func (r *PaymentRepository) ListForStudent(ctx context.Context, studentID int64) ([]domain.Payment, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, mono_tx_id, amount, comment_raw, received_at,
+		student_id, collection_id, match_method, matched_at
+		FROM payments WHERE student_id = ? ORDER BY matched_at DESC`, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("list payments for student %d: %w", studentID, err)
+	}
+	defer rows.Close()
+	var result []domain.Payment
+	for rows.Next() {
+		payment, err := scanPayment(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan student payment: %w", err)
+		}
+		result = append(result, payment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate student payments: %w", err)
 	}
 	return result, nil
 }

@@ -47,6 +47,9 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	if _, err := students.GetByID(ctx, studentIDValue); err != nil {
 		t.Fatal(err)
 	}
+	if got, err := students.Search(ctx, "Петренко"); err != nil || len(got) != 1 {
+		t.Fatalf("search students: got %#v, err %v", got, err)
+	}
 	if _, err := students.GetByTelegramID(ctx, telegramID); err != nil {
 		t.Fatal(err)
 	}
@@ -56,14 +59,15 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	if unregistered, err := students.ListUnregistered(ctx); err != nil || len(unregistered) != 0 {
 		t.Fatalf("unregistered students: %v, count=%d", err, len(unregistered))
 	}
-
 	collectionID, err := collections.Create(ctx, "Збір", 10000, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if active, err := collections.ListActive(ctx); err != nil || len(active) != 1 {
 		t.Fatalf("active collections: %v, count=%d", err, len(active))
 	}
+
 	if last, err := reminders.GetLastSent(ctx, collectionID, studentIDValue); err != nil || !last.IsZero() {
 		t.Fatalf("initial reminder state: %v, time=%v", err, last)
 	}
@@ -104,6 +108,26 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	}
 	if err := collections.CloseManually(ctx, collectionID); err == nil {
 		t.Fatal("expected manual close of closed collection to fail")
+	}
+}
+
+func TestStudentRepositoryUnlinksTelegramAccount(t *testing.T) {
+	ctx := context.Background()
+	db := repositoryTestDB(t)
+	repository := NewStudentRepository(db)
+	result, err := db.Exec(`INSERT INTO students(full_name, telegram_id) VALUES ('Коваленко Ірина', 99)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	studentID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.UnlinkTelegramID(ctx, studentID); err != nil {
+		t.Fatalf("unlink student: %v", err)
+	}
+	if registered, err := repository.ListRegistered(ctx); err != nil || len(registered) != 0 {
+		t.Fatalf("registered students after unlink: %v, count=%d", err, len(registered))
 	}
 }
 

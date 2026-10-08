@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"collect-bot/internal/domain"
 )
@@ -101,6 +102,44 @@ func (r *StudentRepository) ListUnregistered(ctx context.Context) ([]domain.Stud
 
 func (r *StudentRepository) ListRegistered(ctx context.Context) ([]domain.Student, error) {
 	return r.list(ctx, `WHERE telegram_id IS NOT NULL`)
+}
+
+func (r *StudentRepository) Search(ctx context.Context, query string) ([]domain.Student, error) {
+	pattern := "%" + strings.TrimSpace(query) + "%"
+	rows, err := r.db.QueryContext(ctx, `SELECT id, telegram_id, full_name, role, created_at
+		FROM students WHERE full_name LIKE ? OR CAST(telegram_id AS TEXT) LIKE ?
+		ORDER BY full_name`, pattern, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("search students: %w", err)
+	}
+	defer rows.Close()
+	var result []domain.Student
+	for rows.Next() {
+		student, err := scanStudent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan searched student: %w", err)
+		}
+		result = append(result, student)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate searched students: %w", err)
+	}
+	return result, nil
+}
+
+func (r *StudentRepository) UnlinkTelegramID(ctx context.Context, studentID int64) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE students SET telegram_id = NULL WHERE id = ?`, studentID)
+	if err != nil {
+		return fmt.Errorf("unlink student %d: %w", studentID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check unlink student %d: %w", studentID, err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("unlink student %d: %w", studentID, sql.ErrNoRows)
+	}
+	return nil
 }
 
 func (r *StudentRepository) list(ctx context.Context, condition string) ([]domain.Student, error) {

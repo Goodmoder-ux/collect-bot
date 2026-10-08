@@ -30,6 +30,42 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		return showCollections(c, collections, payments)
 	}))
 	b.Client.Handle("/help", b.RequireStudent(b.help))
+	b.Client.Handle("/students", b.RequireAdmin(b.listStudents))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_student"}, b.RequireAdmin(func(c telebot.Context) error {
+		return b.showStudentProfile(c, payments, collections)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_students_back"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return b.listStudents(c)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_students_help"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Пошук: /students частина ПІБ або Telegram ID\nНаприклад: /students Петренко")
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_student_unlink"}, b.RequireAdmin(b.confirmStudentUnlink))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_student_unlink_cancel"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return b.showStudentProfile(c, payments, collections)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "admin_student_unlink_confirm"}, b.RequireAdmin(func(c telebot.Context) error {
+		studentID, err := parseCallbackID(c.Data(), "student")
+		if err != nil {
+			return err
+		}
+		if err := b.students.UnlinkTelegramID(context.Background(), studentID); err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("✅ Telegram-акаунт відв'язано. Історію платежів збережено.")
+	}))
 	b.Client.Handle("/status", b.RequireAdmin(func(c telebot.Context) error {
 		return b.showCollectionStatus(c, collections, payments)
 	}))
@@ -268,6 +304,7 @@ func (b *Bot) help(c telebot.Context) error {
 				"/newcollection — створити збір через wizard\n" +
 				"/status ID — детальний статус збору\n" +
 				"/unmatched — нерозпізнані платежі\n" +
+				"/students — список, пошук та профілі студентів\n" +
 				"/report — звіт адміністратора\n" +
 				"/export ID — CSV-звіт по збору\n" +
 				"/closecollection ID — закрити збір із підтвердженням\n" +

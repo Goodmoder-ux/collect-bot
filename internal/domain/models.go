@@ -62,8 +62,10 @@ type StudentRepository interface {
 	ListUnregistered(ctx context.Context) ([]Student, error)
 	// ListRegistered returns students whose Telegram account has been confirmed.
 	ListRegistered(ctx context.Context) ([]Student, error)
+	Search(ctx context.Context, query string) ([]Student, error)
 	// SetTelegramID links an unregistered student after admin approval.
 	SetTelegramID(ctx context.Context, studentID, telegramID int64) error
+	UnlinkTelegramID(ctx context.Context, studentID int64) error
 	CreatePendingRegistration(ctx context.Context, telegramID, studentID int64, username string) error
 	GetPendingRegistrationByStudentID(ctx context.Context, studentID int64) (PendingRegistration, error)
 	DeletePendingRegistration(ctx context.Context, studentID int64) error
@@ -87,6 +89,7 @@ type PaymentRepository interface {
 	// ListUnmatched returns payments requiring administrator review.
 	ListUnmatched(ctx context.Context) ([]Payment, error)
 	ListForCollection(ctx context.Context, collectionID int64) ([]Payment, error)
+	ListForStudent(ctx context.Context, studentID int64) ([]Payment, error)
 	Create(ctx context.Context, payment Payment) error
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
 }

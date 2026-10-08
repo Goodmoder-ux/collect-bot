@@ -34,6 +34,7 @@ func (b *Bot) setCommands() error {
 	studentCommands := []telebot.Command{
 		{Text: "collections", Description: "Активні збори та статус"},
 		{Text: "jar", Description: "Реквізити банки Monobank"},
+		{Text: "help", Description: "Довідка та команди"},
 	}
 	if err := b.Client.SetCommands(studentCommands); err != nil {
 		return fmt.Errorf("telegram: set student commands: %w", err)

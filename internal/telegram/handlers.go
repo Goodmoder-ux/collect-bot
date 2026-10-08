@@ -29,6 +29,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	b.Client.Handle("/collections", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
 	}))
+	b.Client.Handle("/help", b.RequireStudent(b.help))
 	b.Client.Handle("/status", b.RequireAdmin(func(c telebot.Context) error {
 		return b.showCollectionStatus(c, collections, payments)
 	}))
@@ -44,6 +45,12 @@ func (b *Bot) RegisterAdminStudentHandlers(
 			return err
 		}
 		return b.sendCollectionStatus(c, id, collections, payments)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_back_collections"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return showCollections(c, collections, payments)
 	}))
 	b.Client.Handle("/payments", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
@@ -61,7 +68,26 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		)
 	}))
 	b.Client.Handle("/closecollection", b.RequireAdmin(func(c telebot.Context) error {
-		return closeCollection(c, collections)
+		return requestCloseCollection(c, collections)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "close_collection_confirm"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid close collection ID: %w", err)
+		}
+		if err := collections.CloseManually(context.Background(), id); err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("✅ Збір закрито.")
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "close_collection_cancel"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Закриття збору скасовано.")
 	}))
 	b.Client.Handle("/unmatched", b.RequireAdmin(func(c telebot.Context) error {
 		return unmatchedWorkflow{payments: payments, students: b.students, collections: collections}.list(c)
@@ -97,18 +123,49 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		if err != nil {
 			return fmt.Errorf("invalid close collection ID: %w", err)
 		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		markup := &telebot.ReplyMarkup{}
+		markup.Inline(markup.Row(
+			telebot.Btn{Unique: "status_close_confirm", Text: "✅ Так, закрити", Data: strconv.FormatInt(id, 10)},
+			telebot.Btn{Unique: "status_close_cancel", Text: "↩️ Назад", Data: strconv.FormatInt(id, 10)},
+		))
+		return c.Edit("Ви впевнені, що хочете закрити цей збір?", markup)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_close_confirm"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid close collection ID: %w", err)
+		}
 		if err := collections.CloseManually(context.Background(), id); err != nil {
 			return err
 		}
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return c.Edit("Збір закрито.")
+		return c.Edit("✅ Збір закрито.")
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_close_cancel"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Закриття збору скасовано.")
 	}))
 	cashWorkflow := cashPaymentWorkflow{students: b.students, collections: collections, payments: payments}
 	b.Client.Handle(&telebot.Btn{Unique: "status_cash"}, b.RequireAdmin(cashWorkflow.chooseStudent))
 	b.Client.Handle(&telebot.Btn{Unique: "cash_student"}, b.RequireAdmin(cashWorkflow.chooseCollection))
 	b.Client.Handle(&telebot.Btn{Unique: "cash_collection"}, b.RequireAdmin(cashWorkflow.execute))
+	b.Client.Handle(&telebot.Btn{Unique: "cash_back_status"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid cash collection ID: %w", err)
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return b.sendCollectionStatus(c, id, collections, payments)
+	}))
 	b.Client.Handle("/match", b.RequireAdmin(func(c telebot.Context) error {
 		return manuallyMatch(c, b, payments, collections)
 	}))
@@ -186,15 +243,45 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 	return c.Send(builder.String())
 }
 
-func closeCollection(c telebot.Context, collections domain.CollectionRepository) error {
+func requestCloseCollection(c telebot.Context, collections domain.CollectionRepository) error {
 	id, err := singleIDArgument(c.Text(), "/closecollection")
 	if err != nil {
 		return err
 	}
-	if err := collections.CloseManually(context.Background(), id); err != nil {
-		return fmt.Errorf("close collection: %w", err)
+	if _, err := collections.GetByID(context.Background(), id); err != nil {
+		return fmt.Errorf("get collection %d: %w", id, err)
 	}
-	return c.Send("Збір закрито.")
+	markup := &telebot.ReplyMarkup{}
+	markup.Inline(markup.Row(
+		telebot.Btn{Unique: "close_collection_confirm", Text: "✅ Так, закрити", Data: strconv.FormatInt(id, 10)},
+		telebot.Btn{Unique: "close_collection_cancel", Text: "↩️ Скасувати", Data: strconv.FormatInt(id, 10)},
+	))
+	return c.Send(fmt.Sprintf("Ви впевнені, що хочете закрити збір #%d?", id), markup)
+}
+
+func (b *Bot) help(c telebot.Context) error {
+	student, _ := StudentFromContext(c)
+	if student.Role == "admin" {
+		return c.Send(
+			"📚 Довідка адміністратора\n\n" +
+				"/collections — активні збори та деталі\n" +
+				"/newcollection — створити збір через wizard\n" +
+				"/status ID — детальний статус збору\n" +
+				"/unmatched — нерозпізнані платежі\n" +
+				"/report — звіт адміністратора\n" +
+				"/export ID — CSV-звіт по збору\n" +
+				"/closecollection ID — закрити збір із підтвердженням\n" +
+				"/cancel — скасувати поточний wizard\n" +
+				"/jar — інструкція оплати через Monobank",
+		)
+	}
+	return c.Send(
+		"📚 Довідка\n\n" +
+			"/collections — активні збори та ваш статус\n" +
+			"/jar — відкрити банку Monobank та інструкція оплати\n" +
+			"/help — показати цю довідку\n\n" +
+			"Після оплати вкажіть своє українське прізвище в коментарі до переказу.",
+	)
 }
 
 func listUnmatched(c telebot.Context, payments domain.PaymentRepository) error {

@@ -69,6 +69,8 @@ func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections doma
 		telebot.Btn{Unique: "status_remind", Text: "🔔 Нагадати боржникам", Data: strconv.FormatInt(id, 10)},
 		telebot.Btn{Unique: "status_cash", Text: "💵 Додати готівковий платіж", Data: strconv.FormatInt(id, 10)},
 		telebot.Btn{Unique: "status_close", Text: "🔒 Закрити збір", Data: strconv.FormatInt(id, 10)},
+	), markup.Row(
+		telebot.Btn{Unique: "status_back_collections", Text: "↩️ До списку зборів", Data: ""},
 	))
 	return c.Send(body.String(), markup)
 }
@@ -94,6 +96,10 @@ type cashPaymentWorkflow struct {
 
 func (w cashPaymentWorkflow) chooseStudent(c telebot.Context) error {
 	collectionID := c.Data()
+	targetCollectionID, err := strconv.ParseInt(collectionID, 10, 64)
+	if err != nil || targetCollectionID <= 0 {
+		return fmt.Errorf("invalid cash collection ID %q", collectionID)
+	}
 	students, err := w.students.ListRegistered(context.Background())
 	if err != nil {
 		return err
@@ -107,6 +113,9 @@ func (w cashPaymentWorkflow) chooseStudent(c telebot.Context) error {
 	for _, student := range students {
 		unpaid := false
 		for _, collection := range active {
+			if collection.ID != targetCollectionID {
+				continue
+			}
 			paid, err := w.payments.ExistsForStudentCollection(context.Background(), student.ID, collection.ID)
 			if err != nil {
 				return err
@@ -135,6 +144,10 @@ func (w cashPaymentWorkflow) chooseCollection(c telebot.Context) error {
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid cash student selection")
 	}
+	targetCollectionID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || targetCollectionID <= 0 {
+		return fmt.Errorf("invalid cash collection ID %q", parts[0])
+	}
 	collections, err := w.collections.ListActive(context.Background())
 	if err != nil {
 		return err
@@ -142,8 +155,15 @@ func (w cashPaymentWorkflow) chooseCollection(c telebot.Context) error {
 	markup := &telebot.ReplyMarkup{}
 	var rows []telebot.Row
 	for _, collection := range collections {
+		if collection.ID != targetCollectionID {
+			continue
+		}
 		rows = append(rows, markup.Row(telebot.Btn{Unique: "cash_collection", Text: collection.Title, Data: parts[1] + "|" + strconv.FormatInt(collection.ID, 10)}))
 	}
+	if len(rows) == 0 {
+		return c.Edit("Цей збір уже закритий або недоступний.")
+	}
+	rows = append(rows, markup.Row(telebot.Btn{Unique: "cash_back_status", Text: "↩️ Назад", Data: parts[0]}))
 	markup.Inline(rows...)
 	if err := c.Respond(); err != nil {
 		return err

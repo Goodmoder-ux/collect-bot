@@ -48,8 +48,8 @@ func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections doma
 	if total > 0 {
 		percent = count * 100 / total
 	}
-	fmt.Fprintf(&body, "Збір: %s\nСума на людину: %.2f грн\nДедлайн: %s\nСплачено: %d/%d (%d%%)\n\n",
-		collection.Title, float64(collection.Amount)/100, collection.DeadlineAt.Format("02.01.2006 15:04"), count, total, percent)
+	fmt.Fprintf(&body, "Збір: %s\nСума на людину: %s\nДедлайн: %s\nСплачено: %d/%d (%d%%)\n\n",
+		collection.Title, formatMoney(collection.Amount), collection.DeadlineAt.Format("02.01.2006 15:04"), count, total, percent)
 	body.WriteString("Сплатили:\n")
 	for _, student := range students {
 		payment, ok := paid[student.ID]
@@ -204,7 +204,7 @@ func (b *Bot) exportCollection(c telebot.Context, collections domain.CollectionR
 	}
 	for _, student := range students {
 		payment, ok := byStudent[student.ID]
-		row := []string{student.FullName, "Unpaid", fmt.Sprintf("%.2f", float64(collection.Amount)/100), "", ""}
+		row := []string{student.FullName, "Unpaid", formatMoney(collection.Amount), "", ""}
 		if ok {
 			row[1] = "Paid"
 			row[3] = paymentMethodLabel(payment.MatchMethod)

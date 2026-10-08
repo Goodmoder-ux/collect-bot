@@ -112,11 +112,11 @@ func (b *Bot) RegisterAdminStudentHandlers(
 func createCollection(c telebot.Context, collections domain.CollectionRepository) error {
 	parts := strings.SplitN(strings.TrimSpace(c.Text()), " ", 2)
 	if len(parts) != 2 {
-		return c.Send("Формат: /newcollection Назва|сума_в_копійках|дедлайн_RFC3339")
+		return c.Send("Формат: /newcollection Назва|сума_в_гривнях|дедлайн_RFC3339")
 	}
 	fields := strings.Split(parts[1], "|")
 	if len(fields) != 3 {
-		return c.Send("Формат: /newcollection Назва|сума_в_копійках|дедлайн_RFC3339")
+		return c.Send("Формат: /newcollection Назва|сума_в_гривнях|дедлайн_RFC3339")
 	}
 	amount, err := strconv.ParseInt(strings.TrimSpace(fields[1]), 10, 64)
 	if err != nil || amount <= 0 {
@@ -159,14 +159,14 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 				status = "оплачено"
 			}
 		}
-		fmt.Fprintf(&builder, "• %s — %d коп., дедлайн %s — %s\n",
-			collection.Title, collection.Amount, collection.DeadlineAt.Format("02.01.2006 15:04"), status)
+		fmt.Fprintf(&builder, "• %s — %s, дедлайн %s — %s\n",
+			collection.Title, formatMoney(collection.Amount), collection.DeadlineAt.Format("02.01.2006 15:04"), status)
 		if isAdmin {
 			markup := &telebot.ReplyMarkup{}
 			markup.Inline(markup.Row(telebot.Btn{
 				Unique: "collection_status", Text: "📊 Деталі платежів", Data: strconv.FormatInt(collection.ID, 10),
 			}))
-			if err := c.Send(fmt.Sprintf("• %s — %d коп., дедлайн %s — %s", collection.Title, collection.Amount,
+			if err := c.Send(fmt.Sprintf("• %s — %s, дедлайн %s — %s", collection.Title, formatMoney(collection.Amount),
 				collection.DeadlineAt.Format("02.01.2006 15:04"), status), markup); err != nil {
 				return err
 			}
@@ -199,7 +199,7 @@ func listUnmatched(c telebot.Context, payments domain.PaymentRepository) error {
 	}
 	var builder strings.Builder
 	for _, payment := range items {
-		fmt.Fprintf(&builder, "#%d: %d коп. — %s\n", payment.ID, payment.Amount, payment.CommentRaw)
+		fmt.Fprintf(&builder, "#%d: %s — %s\n", payment.ID, formatMoney(payment.Amount), payment.CommentRaw)
 	}
 	return c.Send(builder.String())
 }

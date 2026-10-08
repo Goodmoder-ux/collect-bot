@@ -133,8 +133,8 @@ func (w *collectionWizard) confirm(c telebot.Context, state collectionWizardStat
 		telebot.Btn{Unique: "collection_cancel", Text: "❌ Скасувати", Data: "cancel"},
 	))
 	return c.Send(fmt.Sprintf(
-		"Перевірте дані збору:\nНазва: %s\nСума: %.2f грн\nДедлайн: %s",
-		state.title, float64(state.amount)/100, state.deadline.Format("02.01.2006 15:04")), markup)
+		"Перевірте дані збору:\nНазва: %s\nСума: %s\nДедлайн: %s",
+		state.title, formatMoney(state.amount), state.deadline.Format("02.01.2006 15:04")), markup)
 }
 
 func (w *collectionWizard) confirmCallback(c telebot.Context) error {
@@ -242,7 +242,7 @@ func (w unmatchedWorkflow) list(c telebot.Context) error {
 		markup.Inline(markup.Row(telebot.Btn{
 			Unique: "match_payment", Text: "🧩 Прив'язати", Data: strconv.FormatInt(payment.ID, 10),
 		}))
-		if _, err := c.Bot().Send(c.Recipient(), fmt.Sprintf("#%d: %d коп. — %s", payment.ID, payment.Amount, payment.CommentRaw), markup); err != nil {
+		if _, err := c.Bot().Send(c.Recipient(), fmt.Sprintf("#%d: %s — %s", payment.ID, formatMoney(payment.Amount), payment.CommentRaw), markup); err != nil {
 			return fmt.Errorf("unmatched workflow: send payment %d: %w", payment.ID, err)
 		}
 	}
@@ -310,7 +310,7 @@ func (w unmatchedWorkflow) chooseCollection(c telebot.Context) error {
 	rows := make([]telebot.Row, 0, len(collections))
 	for _, collection := range collections {
 		rows = append(rows, markup.Row(telebot.Btn{
-			Unique: "match_collection", Text: fmt.Sprintf("%s (%.2f грн)", collection.Title, float64(collection.Amount)/100),
+			Unique: "match_collection", Text: fmt.Sprintf("%s (%s)", collection.Title, formatMoney(collection.Amount)),
 			Data: fmt.Sprintf("%s|%d", c.Data(), collection.ID),
 		}))
 	}

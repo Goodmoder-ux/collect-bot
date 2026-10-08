@@ -87,7 +87,7 @@ func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection do
 		if !lastSent.IsZero() && now.Sub(lastSent) < 24*time.Hour {
 			continue
 		}
-		text := fmt.Sprintf("Нагадування: збір «%s» очікує вашу оплату. Сума: %d коп.", collection.Title, collection.Amount)
+		text := fmt.Sprintf("Нагадування: збір «%s» очікує вашу оплату. Сума: %d.%02d грн.", collection.Title, collection.Amount/100, collection.Amount%100)
 		if err := s.notifier.Send(ctx, *student.TelegramID, text); err != nil {
 			return fmt.Errorf("send reminder to student %d: %w", student.ID, err)
 		}

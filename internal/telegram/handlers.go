@@ -18,9 +18,12 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	reports domain.AdminReportRepository,
 	jarURL string,
 ) {
-	b.Client.Handle("/newcollection", b.RequireAdmin(func(c telebot.Context) error {
-		return createCollection(c, collections)
-	}))
+	collectionWizard := newCollectionWizard(collections, b.adminID)
+	b.Client.Handle("/newcollection", b.RequireAdmin(collectionWizard.start))
+	b.Client.Handle(telebot.OnText, collectionWizard.text)
+	b.Client.Handle(&telebot.Btn{Unique: "collection_deadline"}, b.RequireAdmin(collectionWizard.deadline))
+	b.Client.Handle(&telebot.Btn{Unique: "collection_confirm"}, b.RequireAdmin(collectionWizard.confirmCallback))
+	b.Client.Handle(&telebot.Btn{Unique: "collection_cancel"}, b.RequireAdmin(collectionWizard.confirmCallback))
 	b.Client.Handle("/collections", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
 	}))
@@ -36,7 +39,20 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		return closeCollection(c, collections)
 	}))
 	b.Client.Handle("/unmatched", b.RequireAdmin(func(c telebot.Context) error {
-		return listUnmatched(c, payments)
+		return unmatchedWorkflow{payments: payments, students: b.students, collections: collections}.list(c)
+	}))
+	workflow := unmatchedWorkflow{payments: payments, students: b.students, collections: collections}
+	b.Client.Handle(&telebot.Btn{Unique: "match_payment"}, b.RequireAdmin(workflow.chooseStudent))
+	b.Client.Handle(&telebot.Btn{Unique: "match_student"}, b.RequireAdmin(workflow.chooseCollection))
+	b.Client.Handle(&telebot.Btn{Unique: "match_collection"}, b.RequireAdmin(workflow.confirm))
+	b.Client.Handle(&telebot.Btn{Unique: "match_confirm"}, b.RequireAdmin(func(c telebot.Context) error {
+		return workflow.execute(c, b)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "match_cancel"}, b.RequireAdmin(func(c telebot.Context) error {
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return c.Edit("Прив'язку платежу скасовано.")
 	}))
 	b.Client.Handle("/match", b.RequireAdmin(func(c telebot.Context) error {
 		return manuallyMatch(c, b, payments, collections)

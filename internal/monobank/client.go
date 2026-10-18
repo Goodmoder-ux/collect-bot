@@ -5,14 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
-const defaultBaseURL = "https://api.monobank.ua"
+const (
+	defaultBaseURL = "https://api.monobank.ua"
+	requestTimeout = 30 * time.Second
+	// statementPageSize is the maximum number of items Monobank returns per statement request.
+	statementPageSize = 500
+)
 
 var ErrRateLimited = errors.New("monobank: rate limited")
 
@@ -29,6 +35,9 @@ func (e *RateLimitError) Error() string {
 
 func (e *RateLimitError) Unwrap() error { return ErrRateLimited }
 
+// RetryAfterDelay returns the delay requested by Monobank, if any.
+func (e *RateLimitError) RetryAfterDelay() time.Duration { return e.RetryAfter }
+
 type Client struct {
 	token      string
 	httpClient *http.Client
@@ -36,7 +45,7 @@ type Client struct {
 }
 
 func NewClient(token string) *Client {
-	return &Client{token: token, httpClient: http.DefaultClient, baseURL: defaultBaseURL}
+	return &Client{token: token, httpClient: &http.Client{Timeout: requestTimeout}, baseURL: defaultBaseURL}
 }
 
 func NewClientWithHTTPClient(token string, httpClient *http.Client, baseURL string) *Client {
@@ -79,6 +88,10 @@ func (c *Client) GetTransactions(ctx context.Context, accountID string, from, to
 	var items []statementItem
 	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
 		return nil, fmt.Errorf("monobank: decode statement response: %w", err)
+	}
+	if len(items) >= statementPageSize {
+		slog.Warn("monobank statement hit the page limit; older transactions in the range may be missing",
+			"items", len(items), "from", from, "to", to)
 	}
 	transactions := make([]domain.Transaction, 0, len(items))
 	for _, item := range items {

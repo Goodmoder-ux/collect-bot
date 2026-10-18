@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"collect-bot/internal/domain"
-	"collect-bot/internal/service"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/service"
 	"gopkg.in/telebot.v3"
 )
 
@@ -210,30 +210,6 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	}))
 }
 
-func createCollection(c telebot.Context, collections domain.CollectionRepository) error {
-	parts := strings.SplitN(strings.TrimSpace(c.Text()), " ", 2)
-	if len(parts) != 2 {
-		return c.Send("Формат: /newcollection Назва|сума_в_гривнях|дедлайн_RFC3339")
-	}
-	fields := strings.Split(parts[1], "|")
-	if len(fields) != 3 {
-		return c.Send("Формат: /newcollection Назва|сума_в_гривнях|дедлайн_RFC3339")
-	}
-	amount, err := parseHryvnia(strings.TrimSpace(fields[1]))
-	if err != nil {
-		return fmt.Errorf("invalid collection amount in hryvnias: %w", err)
-	}
-	deadline, err := time.Parse(time.RFC3339, strings.TrimSpace(fields[2]))
-	if err != nil {
-		return fmt.Errorf("invalid collection deadline: %w", err)
-	}
-	id, err := collections.Create(context.Background(), strings.TrimSpace(fields[0]), amount, deadline)
-	if err != nil {
-		return fmt.Errorf("create collection: %w", err)
-	}
-	return c.Send(fmt.Sprintf("Збір #%d створено.", id))
-}
-
 func showCollections(c telebot.Context, collections domain.CollectionRepository, payments domain.PaymentRepository) error {
 	student, ok := StudentFromContext(c)
 	if !ok {
@@ -319,23 +295,6 @@ func (b *Bot) help(c telebot.Context) error {
 			"/help — показати цю довідку\n\n" +
 			"Після оплати вкажіть своє українське прізвище в коментарі до переказу.",
 	)
-}
-
-func listUnmatched(c telebot.Context, payments domain.PaymentRepository) error {
-	items, err := payments.ListUnmatched(context.Background())
-	if err != nil {
-		return fmt.Errorf("list unmatched payments: %w", err)
-	}
-	if len(items) == 0 {
-		return c.Send("Нерозпізнаних платежів немає.")
-	}
-	var builder strings.Builder
-	builder.WriteString("⚠️ Нерозпізнані платежі\n\n")
-	for _, payment := range items {
-		fmt.Fprintf(&builder, "Платіж #%d\nСума: %s\nКоментар: %s\nОтримано: %s\n\n",
-			payment.ID, formatMoney(payment.Amount), payment.CommentRaw, payment.ReceivedAt.Format("02.01.2006 15:04"))
-	}
-	return c.Send(builder.String())
 }
 
 func manuallyMatch(c telebot.Context, b *Bot, payments domain.PaymentRepository, collections domain.CollectionRepository) error {

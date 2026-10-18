@@ -2,11 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
+
+// DefaultReminderHour is the local hour when daily reminders and deadline checks run.
+const DefaultReminderHour = 15
+
+// reminderCooldown is shorter than a day so timer jitter cannot skip a daily run.
+const reminderCooldown = 20 * time.Hour
 
 type Notifier interface {
 	Send(ctx context.Context, telegramID int64, text string) error
@@ -45,12 +53,13 @@ func (s *ReminderScheduler) SendDebtorReminders(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("list collections for reminders: %w", err)
 	}
+	var errs []error
 	for _, collection := range collections {
 		if err := s.sendForCollection(ctx, collection, true); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *ReminderScheduler) SendDebtorReminderForCollection(ctx context.Context, collectionID int64) error {
@@ -75,6 +84,8 @@ func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection do
 	if err != nil {
 		return fmt.Errorf("list students for reminders: %w", err)
 	}
+	// A failed send to one student (e.g. they blocked the bot) must not stop the others.
+	var sendErrs []error
 	for _, student := range students {
 		if student.TelegramID == nil {
 			continue
@@ -90,7 +101,7 @@ func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection do
 		if err != nil {
 			return fmt.Errorf("get reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
 		}
-		if !lastSent.IsZero() && now.Sub(lastSent) < 24*time.Hour {
+		if !lastSent.IsZero() && now.Sub(lastSent) < reminderCooldown {
 			continue
 		}
 		text := fmt.Sprintf(
@@ -100,14 +111,19 @@ func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection do
 			jarURLText(s.jarURL),
 		)
 		if err := s.notifier.Send(ctx, *student.TelegramID, text); err != nil {
-			return fmt.Errorf("send reminder to student %d: %w", student.ID, err)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			slog.Warn("send reminder failed", "collection_id", collection.ID, "student_id", student.ID, "err", err)
+			sendErrs = append(sendErrs, fmt.Errorf("send reminder to student %d: %w", student.ID, err))
+			continue
 		}
 
 		if err := s.state.SetLastSent(ctx, collection.ID, student.ID, now); err != nil {
 			return fmt.Errorf("save reminder state for collection %d student %d: %w", collection.ID, student.ID, err)
 		}
 	}
-	return nil
+	return errors.Join(sendErrs...)
 }
 
 func jarURLText(url string) string {
@@ -146,13 +162,15 @@ func (c *DeadlineChecker) NotifyExpired(ctx context.Context) error {
 	return nil
 }
 
-func RunDailySchedulers(ctx context.Context, reminder *ReminderScheduler, deadlines *DeadlineChecker, location *time.Location) error {
+// RunDailySchedulers runs reminders and deadline checks every day at hour in location
+// until ctx is cancelled. Job failures are logged and retried on the next run.
+func RunDailySchedulers(ctx context.Context, reminder *ReminderScheduler, deadlines *DeadlineChecker, location *time.Location, hour int) error {
 	if location == nil {
 		location = time.Local
 	}
 	for {
-		now := time.Now().In(location)
-		next := time.Date(now.Year(), now.Month(), now.Day()+1, 15, 0, 0, 0, location)
+		next := nextDailyRun(time.Now().In(location), hour)
+		slog.Info("next daily run scheduled", "at", next)
 		timer := time.NewTimer(time.Until(next))
 		select {
 		case <-ctx.Done():
@@ -160,11 +178,20 @@ func RunDailySchedulers(ctx context.Context, reminder *ReminderScheduler, deadli
 			return ctx.Err()
 		case <-timer.C:
 			if err := reminder.SendDebtorReminders(ctx); err != nil {
-				return err
+				slog.Error("daily debtor reminders failed", "err", err)
 			}
 			if err := deadlines.NotifyExpired(ctx); err != nil {
-				return err
+				slog.Error("daily deadline check failed", "err", err)
 			}
 		}
 	}
+}
+
+// nextDailyRun returns the next time after now at hour:00 in now's location.
+func nextDailyRun(now time.Time, hour int) time.Time {
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, now.Location())
+	if !next.After(now) {
+		next = time.Date(now.Year(), now.Month(), now.Day()+1, hour, 0, 0, 0, now.Location())
+	}
+	return next
 }

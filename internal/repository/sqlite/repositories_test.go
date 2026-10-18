@@ -3,18 +3,15 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
 func repositoryTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
-	db, err := Open(context.Background(), ":memory:", filepath.Join(filepath.Dir(file), "..", "..", "..", "migrations"))
+	db, err := Open(context.Background(), ":memory:")
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}

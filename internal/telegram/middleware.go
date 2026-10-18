@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 	"gopkg.in/telebot.v3"
 )
 

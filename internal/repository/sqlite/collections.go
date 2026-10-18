@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
 type CollectionRepository struct{ db *sql.DB }

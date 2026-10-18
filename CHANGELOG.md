@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-18
+
 ### Added
 - Published multi-arch Docker image at `ghcr.io/goodmoder-ux/collect-bot` with CI and tagged releases.
 - `backup` subcommand for consistent online SQLite backups.
@@ -33,3 +35,6 @@ All notable changes to this project are documented here. The format is based on
 - If you used the old `docker-compose.yml`, move your database from `./data/app.db` (mounted at
   `/app/data`) to the new mount: keep the `./data` directory, set `DB_PATH=/data/app.db` (or remove
   it from `.env`), switch to `compose.yaml` and run `sudo chown -R 65532:65532 data`.
+
+[Unreleased]: https://github.com/Goodmoder-ux/collect-bot/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Goodmoder-ux/collect-bot/releases/tag/v0.1.0

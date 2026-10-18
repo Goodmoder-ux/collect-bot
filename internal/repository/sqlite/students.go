@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
 type StudentRepository struct{ db *sql.DB }
@@ -142,8 +142,9 @@ func (r *StudentRepository) UnlinkTelegramID(ctx context.Context, studentID int6
 	return nil
 }
 
+// list is only called with constant WHERE clauses, never with user input.
 func (r *StudentRepository) list(ctx context.Context, condition string) ([]domain.Student, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, telegram_id, full_name, role, created_at FROM students `+condition+` ORDER BY id`)
+	rows, err := r.db.QueryContext(ctx, `SELECT id, telegram_id, full_name, role, created_at FROM students `+condition+` ORDER BY id`) //nolint:gosec // constant condition
 	if err != nil {
 		return nil, fmt.Errorf("list students: %w", err)
 	}
@@ -183,4 +184,35 @@ func nullableString(value string) any {
 		return nil
 	}
 	return value
+}
+
+// ImportNames adds students to the roster, skipping blank lines and names that
+// already exist. It returns how many students were added.
+func (r *StudentRepository) ImportNames(ctx context.Context, names []string) (int, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("import students: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	added := 0
+	for _, name := range names {
+		name = strings.Join(strings.Fields(name), " ")
+		if name == "" {
+			continue
+		}
+		result, err := tx.ExecContext(ctx, `INSERT INTO students(full_name, role) VALUES (?, 'student')
+			ON CONFLICT(full_name) DO NOTHING`, name)
+		if err != nil {
+			return 0, fmt.Errorf("import student %q: %w", name, err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("import student %q: %w", name, err)
+		}
+		added += int(affected)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("import students: commit: %w", err)
+	}
+	return added, nil
 }

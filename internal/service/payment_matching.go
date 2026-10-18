@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
 type PaymentMatcher struct {
@@ -81,6 +82,9 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 	}); err != nil {
 		return fmt.Errorf("record transaction %q: %w", transaction.ID, err)
 	}
+	// Comments are not logged: they can contain personal names.
+	slog.Info("payment recorded", "tx_id", transaction.ID, "amount", transaction.Amount, "method", method,
+		"student_matches", studentMatches, "collection_matches", collectionMatches)
 	if method == "auto_exact" {
 		if _, err := m.collections.CloseIfAllStudentsPaid(ctx, *collectionID); err != nil {
 			return fmt.Errorf("auto-close collection %d: %w", *collectionID, err)

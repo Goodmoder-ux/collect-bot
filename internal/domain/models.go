@@ -103,3 +103,9 @@ type ReminderRepository interface {
 	GetLastSent(ctx context.Context, collectionID, studentID int64) (time.Time, error)
 	SetLastSent(ctx context.Context, collectionID, studentID int64, sentAt time.Time) error
 }
+
+// PollerStateRepository persists the statement polling cursor across restarts.
+type PollerStateRepository interface {
+	GetLastPoll(ctx context.Context, accountID string) (time.Time, error)
+	SetLastPoll(ctx context.Context, accountID string, polledAt time.Time) error
+}

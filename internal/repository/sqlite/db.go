@@ -4,15 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"github.com/Goodmoder-ux/collect-bot/migrations"
 	_ "modernc.org/sqlite"
 )
 
-func Open(ctx context.Context, path string, migrationsDir string) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil && filepath.Dir(path) != "." {
+// Open opens the SQLite database at path and applies the embedded migrations.
+func Open(ctx context.Context, path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil && filepath.Dir(path) != "." {
 		return nil, fmt.Errorf("sqlite: create database directory: %w", err)
 	}
 	db, err := sql.Open("sqlite", path)
@@ -22,22 +25,36 @@ func Open(ctx context.Context, path string, migrationsDir string) (*sql.DB, erro
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("sqlite: ping database: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;`); err != nil {
-		db.Close()
+	if _, err := db.ExecContext(ctx, `PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;`); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("sqlite: configure database: %w", err)
 	}
-	if err := applyMigrations(ctx, db, migrationsDir); err != nil {
-		db.Close()
+	if err := applyMigrations(ctx, db, migrations.FS); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	return db, nil
 }
 
-func applyMigrations(ctx context.Context, db *sql.DB, dir string) error {
-	entries, err := os.ReadDir(dir)
+// Backup writes a consistent copy of the database to dest while it stays online.
+func Backup(ctx context.Context, db *sql.DB, dest string) error {
+	if _, err := os.Stat(dest); err == nil {
+		return fmt.Errorf("sqlite: backup destination %s already exists", dest)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+		return fmt.Errorf("sqlite: create backup directory: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `VACUUM INTO ?`, dest); err != nil {
+		return fmt.Errorf("sqlite: backup to %s: %w", dest, err)
+	}
+	return nil
+}
+
+func applyMigrations(ctx context.Context, db *sql.DB, fsys fs.FS) error {
+	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return fmt.Errorf("sqlite: read migrations: %w", err)
 	}
@@ -59,7 +76,7 @@ func applyMigrations(ctx context.Context, db *sql.DB, dir string) error {
 		if applied {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(dir, name))
+		content, err := fs.ReadFile(fsys, name)
 		if err != nil {
 			return fmt.Errorf("sqlite: read migration %s: %w", name, err)
 		}

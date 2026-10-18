@@ -3,13 +3,11 @@ package service
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
-	"collect-bot/internal/domain"
-	sqliterepository "collect-bot/internal/repository/sqlite"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
+	sqliterepository "github.com/Goodmoder-ux/collect-bot/internal/repository/sqlite"
 )
 
 type integrationTransactionSource struct {
@@ -30,12 +28,7 @@ type integrationFixture struct {
 
 func newIntegrationFixture(t *testing.T) integrationFixture {
 	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve integration test path")
-	}
-	migrationsDir := filepath.Join(filepath.Dir(file), "..", "..", "migrations")
-	db, err := sqliterepository.Open(context.Background(), ":memory:", migrationsDir)
+	db, err := sqliterepository.Open(context.Background(), ":memory:")
 	if err != nil {
 		t.Fatalf("open in-memory database: %v", err)
 	}

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"collect-bot/internal/domain"
-	"collect-bot/internal/service"
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
+	"github.com/Goodmoder-ux/collect-bot/internal/service"
 	"gopkg.in/telebot.v3"
 )
 

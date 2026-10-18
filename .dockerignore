@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+data
+docs
+bin
+dist
+*.db
+*.db-*
+*.md
+Dockerfile
+compose*.yaml

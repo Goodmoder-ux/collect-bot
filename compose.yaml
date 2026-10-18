@@ -1,0 +1,22 @@
+# Production deployment. Pin BOT_VERSION in .env (e.g. BOT_VERSION=0.1.0) for predictable upgrades.
+services:
+  bot:
+    image: ghcr.io/goodmoder-ux/collect-bot:${BOT_VERSION:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # The container runs as UID 65532: run `sudo chown -R 65532:65532 data` once after creating it.
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

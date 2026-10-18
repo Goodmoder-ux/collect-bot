@@ -1,0 +1,30 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - revive
+    - unconvert
+  settings:
+    revive:
+      rules:
+        # Exported identifiers are internal to this module; doc comments are optional.
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -1,0 +1,9 @@
+# Local build override:
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+services:
+  bot:
+    image: collect-bot:dev
+    build:
+      context: .
+      args:
+        VERSION: dev

@@ -16,6 +16,7 @@ const (
 	notFoundText       = "Запис не знайдено. Можливо, його вже змінено або видалено."
 	collectionDoneText = "Цей збір уже закрито."
 	alreadyPaidText    = "Цей студент уже оплатив цей збір."
+	alreadyMatchedText = "Цей платіж уже прив'язано."
 )
 
 var errHandlerPanic = errors.New("telegram: handler panicked")
@@ -40,6 +41,8 @@ func userMessage(err error) (text string, expected bool) {
 		return collectionDoneText, true
 	case errors.Is(err, domain.ErrAlreadyPaid):
 		return alreadyPaidText, true
+	case errors.Is(err, domain.ErrPaymentAlreadyMatched):
+		return alreadyMatchedText, true
 	case errors.Is(err, sql.ErrNoRows):
 		return notFoundText, true
 	default:

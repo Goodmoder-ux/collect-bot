@@ -71,6 +71,7 @@ func TestUserMessage(t *testing.T) {
 		{"user error", fmt.Errorf("wrap: %w", newUserError("Формат: %s ID", "/status")), "Формат: /status ID", true},
 		{"closed collection", fmt.Errorf("collection 3: %w", domain.ErrCollectionNotActive), collectionDoneText, true},
 		{"already paid", fmt.Errorf("x: %w", domain.ErrAlreadyPaid), alreadyPaidText, true},
+		{"matched payment", fmt.Errorf("x: %w", domain.ErrPaymentAlreadyMatched), alreadyMatchedText, true},
 		{"not found", fmt.Errorf("get collection 9: %w", sql.ErrNoRows), notFoundText, true},
 		{"unknown", errors.New("database is locked"), genericErrorText, false},
 	}

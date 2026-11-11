@@ -1,7 +1,10 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 
 	"gopkg.in/telebot.v3"
 )
@@ -63,5 +66,15 @@ func TestTelegramUsername(t *testing.T) {
 	}
 	if got := telegramUsername(&telebot.User{}); got != "відсутній" {
 		t.Fatalf("telegramUsername() = %q, want %q", got, "відсутній")
+	}
+}
+
+func TestSameAmountWarning(t *testing.T) {
+	active := []domain.Collection{{Title: "Квіти", Amount: 15000}}
+	if warning := sameAmountWarning(active, 15000); !strings.Contains(warning, "«Квіти»") {
+		t.Fatalf("warning = %q, want it to name the collection with the same amount", warning)
+	}
+	if warning := sameAmountWarning(active, 20000); warning != "" {
+		t.Fatalf("warning = %q, want none for a different amount", warning)
 	}
 }

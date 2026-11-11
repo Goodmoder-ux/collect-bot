@@ -81,17 +81,24 @@ func (f *fakeCollections) CloseManually(context.Context, int64) error { return n
 
 type fakePayments struct {
 	existing map[string]bool
-	created  []domain.Payment
-	updated  []int64
+	// paid lists {studentID, collectionID} pairs that already have a payment.
+	paid map[[2]int64]bool
+	// stored overrides what GetByID returns.
+	stored  map[int64]domain.Payment
+	created []domain.Payment
+	updated []int64
 }
 
 func (f *fakePayments) ExistsByMonoTransactionID(_ context.Context, id string) (bool, error) {
 	return f.existing[id], nil
 }
-func (f *fakePayments) ExistsForStudentCollection(context.Context, int64, int64) (bool, error) {
-	return false, nil
+func (f *fakePayments) ExistsForStudentCollection(_ context.Context, studentID, collectionID int64) (bool, error) {
+	return f.paid[[2]int64{studentID, collectionID}], nil
 }
 func (f *fakePayments) GetByID(_ context.Context, id int64) (domain.Payment, error) {
+	if payment, ok := f.stored[id]; ok {
+		return payment, nil
+	}
 	return domain.Payment{ID: id, Amount: 15000, MatchMethod: "unmatched"}, nil
 }
 func (f *fakePayments) ListUnmatched(context.Context) ([]domain.Payment, error) { return nil, nil }

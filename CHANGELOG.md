@@ -19,7 +19,15 @@ All notable changes to this project are documented here. The format is based on
   collection closes because everyone has paid.
 - A student whose registration request is rejected is told so.
 
+- More surname forms are recognised in payment comments, including feminine and genitive ones
+  ("за Ковальської", "від Шевчука").
+- The bank's description of a transfer is searched for the surname together with the payer's
+  comment, and both are shown to the admin.
+- A warning when a new collection has the same amount as an active one.
+
 ### Changed
+- With several active collections of the same amount, a payment goes to the one the student has
+  not paid yet with the nearest deadline. Before, every such payment needed manual matching.
 - The admin's `/collections` is a single message with one button per collection.
 - Buttons under the collection status are shorter and laid out in two rows so they are not cut off
   on phones.
@@ -28,10 +36,19 @@ All notable changes to this project are documented here. The format is based on
 - `/match payment_id student_id collection_id`. Use the buttons in `/unmatched` instead.
 
 ### Fixed
+- A repeated payment from a student who already paid is no longer recorded as a second payment
+  for the same collection. It goes to `/unmatched` for the admin to decide.
+- A payment that is already matched can no longer be matched again by a second tap, and a student
+  cannot be given two payments for one collection.
 - Matching a payment or approving a registration no longer reports an error when the student
   cannot be notified (for example, they blocked the bot).
 - The bot now replies when a command or button fails instead of staying silent, and inline
   buttons no longer keep spinning after an error. A handler panic no longer crashes the bot.
+
+### Migration notes
+- The database gets a rule that a student has at most one payment per collection. If an earlier
+  version recorded duplicates, the earliest payment of each pair stays and the others reappear
+  in `/unmatched`. Nothing is deleted. Take a backup before upgrading, as usual.
 
 ## [0.1.0] - 2026-10-18
 

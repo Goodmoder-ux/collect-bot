@@ -8,4 +8,6 @@ var (
 	ErrCollectionNotActive = errors.New("collection is not active")
 	// ErrAlreadyPaid is returned when a student already has a payment for the collection.
 	ErrAlreadyPaid = errors.New("student already paid the collection")
+	// ErrPaymentAlreadyMatched is returned when a payment is no longer waiting for manual review.
+	ErrPaymentAlreadyMatched = errors.New("payment is already matched")
 )

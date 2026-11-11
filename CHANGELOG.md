@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `/status`, `/export` and `/closecollection` without an ID show the collections as buttons, so
+  collection IDs never have to be typed or guessed. Passing an ID still works.
+- Archive of closed collections (`/collections` → "Архів") with their status and CSV export.
+- "Експорт CSV" button and the collected total in the collection status.
+
+### Changed
+- The admin's `/collections` is a single message with one button per collection.
+- Buttons under the collection status are shorter and laid out in two rows so they are not cut off
+  on phones.
+
+### Removed
+- `/match payment_id student_id collection_id`. Use the buttons in `/unmatched` instead.
+
 ### Fixed
 - The bot now replies when a command or button fails instead of staying silent, and inline
   buttons no longer keep spinning after an error. A handler panic no longer crashes the bot.

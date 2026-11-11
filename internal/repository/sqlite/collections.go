@@ -31,6 +31,19 @@ func (r *CollectionRepository) ListActive(ctx context.Context) ([]domain.Collect
 	if err != nil {
 		return nil, fmt.Errorf("list active collections: %w", err)
 	}
+	return collectCollections(rows)
+}
+
+func (r *CollectionRepository) ListClosed(ctx context.Context, limit int) ([]domain.Collection, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, title, amount, deadline_at, status, closed_reason, created_at, closed_at
+		FROM collections WHERE status <> 'active' ORDER BY closed_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list closed collections: %w", err)
+	}
+	return collectCollections(rows)
+}
+
+func collectCollections(rows *sql.Rows) ([]domain.Collection, error) {
 	defer rows.Close()
 	var result []domain.Collection
 	for rows.Next() {

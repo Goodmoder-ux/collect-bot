@@ -74,6 +74,8 @@ type StudentRepository interface {
 type CollectionRepository interface {
 	GetByID(ctx context.Context, id int64) (Collection, error)
 	ListActive(ctx context.Context) ([]Collection, error)
+	// ListClosed returns up to limit closed collections, most recently closed first.
+	ListClosed(ctx context.Context, limit int) ([]Collection, error)
 	CloseIfAllStudentsPaid(ctx context.Context, collectionID int64) (bool, error)
 	// Create adds an active collection.
 	Create(ctx context.Context, title string, amount int64, deadline time.Time) (int64, error)

@@ -106,6 +106,19 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	if err := collections.CloseManually(ctx, collectionID); err == nil {
 		t.Fatal("expected manual close of closed collection to fail")
 	}
+	if active, err := collections.ListActive(ctx); err != nil || len(active) != 0 {
+		t.Fatalf("active after close = %v, %v; want none", active, err)
+	}
+	closed, err := collections.ListClosed(ctx, 10)
+	if err != nil || len(closed) != 1 {
+		t.Fatalf("closed = %v, %v; want one collection", closed, err)
+	}
+	if closed[0].ID != collectionID || closed[0].ClosedAt == nil || closed[0].ClosedReason == nil || *closed[0].ClosedReason != "all_paid" {
+		t.Fatalf("closed collection = %+v", closed[0])
+	}
+	if limited, err := collections.ListClosed(ctx, 0); err != nil || len(limited) != 0 {
+		t.Fatalf("closed with limit 0 = %v, %v", limited, err)
+	}
 }
 
 func TestStudentRepositoryUnlinksTelegramAccount(t *testing.T) {

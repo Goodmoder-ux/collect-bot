@@ -1,4 +1,4 @@
-# Production deployment. Pin BOT_VERSION in .env (e.g. BOT_VERSION=0.1.0) for predictable upgrades.
+# Production deployment. Pin BOT_VERSION in .env (e.g. BOT_VERSION=0.2.0) for predictable upgrades.
 services:
   bot:
     image: ghcr.io/goodmoder-ux/collect-bot:${BOT_VERSION:-latest}

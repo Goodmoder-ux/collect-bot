@@ -139,6 +139,7 @@ type cashPaymentWorkflow struct {
 	students    domain.StudentRepository
 	collections domain.CollectionRepository
 	payments    domain.PaymentRepository
+	matcher     *service.PaymentMatcher
 }
 
 func (w cashPaymentWorkflow) chooseStudent(c telebot.Context) error {
@@ -231,8 +232,7 @@ func (w cashPaymentWorkflow) execute(c telebot.Context) error {
 	if err != nil {
 		return err
 	}
-	matcher := service.NewPaymentMatcher(w.students, w.collections, w.payments)
-	if err := matcher.RecordCash(context.Background(), studentID, collectionID); err != nil {
+	if err := w.matcher.RecordCash(context.Background(), studentID, collectionID); err != nil {
 		return err
 	}
 	if err := c.Respond(); err != nil {

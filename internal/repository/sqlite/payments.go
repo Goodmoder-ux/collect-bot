@@ -113,16 +113,20 @@ func (r *PaymentRepository) ListForStudent(ctx context.Context, studentID int64)
 	return result, nil
 }
 
-func (r *PaymentRepository) Create(ctx context.Context, payment domain.Payment) error {
-	_, err := r.db.ExecContext(ctx, `INSERT INTO payments
+func (r *PaymentRepository) Create(ctx context.Context, payment domain.Payment) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `INSERT INTO payments
 		(mono_tx_id, amount, comment_raw, received_at, student_id, collection_id, match_method, matched_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, payment.MonoTxID, payment.Amount, payment.CommentRaw,
 		payment.ReceivedAt, nullableID(payment.StudentID), nullableID(payment.CollectionID),
 		payment.MatchMethod, payment.MatchedAt)
 	if err != nil {
-		return fmt.Errorf("create payment %q: %w", payment.MonoTxID, err)
+		return 0, fmt.Errorf("create payment %q: %w", payment.MonoTxID, err)
 	}
-	return nil
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("get created payment %q ID: %w", payment.MonoTxID, err)
+	}
+	return id, nil
 }
 
 func (r *PaymentRepository) UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error {

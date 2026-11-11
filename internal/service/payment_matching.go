@@ -9,15 +9,54 @@ import (
 	"github.com/Goodmoder-ux/collect-bot/internal/domain"
 )
 
+// PaymentEvents is told about payment outcomes so people can be notified.
+// Implementations handle their own failures: a notification that cannot be
+// delivered must never undo or block the payment it describes.
+type PaymentEvents interface {
+	// PaymentMatched fires when a payment is assigned to a student and a collection.
+	PaymentMatched(ctx context.Context, student domain.Student, collection domain.Collection, payment domain.Payment)
+	// PaymentUnmatched fires when an incoming payment needs manual review.
+	PaymentUnmatched(ctx context.Context, payment domain.Payment)
+	// CollectionClosed fires when a collection closes because everyone has paid.
+	CollectionClosed(ctx context.Context, collection domain.Collection)
+}
+
+type noEvents struct{}
+
+func (noEvents) PaymentMatched(context.Context, domain.Student, domain.Collection, domain.Payment) {}
+func (noEvents) PaymentUnmatched(context.Context, domain.Payment)                                  {}
+func (noEvents) CollectionClosed(context.Context, domain.Collection)                               {}
+
 type PaymentMatcher struct {
 	students    domain.StudentRepository
 	collections domain.CollectionRepository
 	payments    domain.PaymentRepository
+	events      PaymentEvents
 	now         func() time.Time
 }
 
 func NewPaymentMatcher(students domain.StudentRepository, collections domain.CollectionRepository, payments domain.PaymentRepository) *PaymentMatcher {
-	return &PaymentMatcher{students: students, collections: collections, payments: payments, now: time.Now}
+	return &PaymentMatcher{students: students, collections: collections, payments: payments, events: noEvents{}, now: time.Now}
+}
+
+// SetEvents registers the receiver of payment notifications. Call it before the matcher is used.
+func (m *PaymentMatcher) SetEvents(events PaymentEvents) {
+	if events == nil {
+		events = noEvents{}
+	}
+	m.events = events
+}
+
+// closeIfComplete closes the collection when every registered student has paid.
+func (m *PaymentMatcher) closeIfComplete(ctx context.Context, collection domain.Collection) error {
+	closed, err := m.collections.CloseIfAllStudentsPaid(ctx, collection.ID)
+	if err != nil {
+		return err
+	}
+	if closed {
+		m.events.CollectionClosed(ctx, collection)
+	}
+	return nil
 }
 
 var _ PaymentProcessor = (*PaymentMatcher)(nil)
@@ -44,13 +83,12 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 	if err != nil {
 		return fmt.Errorf("find student for transaction %q: %w", transaction.ID, err)
 	}
-	var studentID *int64
+	var matchedStudent domain.Student
 	var studentMatches int
 	for _, student := range students {
 		if studentMatchesComment(student.FullName, transaction.Comment) {
 			studentMatches++
-			id := student.ID
-			studentID = &id
+			matchedStudent = student
 		}
 	}
 
@@ -58,53 +96,63 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 	if err != nil {
 		return fmt.Errorf("find collection for transaction %q: %w", transaction.ID, err)
 	}
-	var collectionID *int64
+	var matchedCollection domain.Collection
 	var collectionMatches int
 	for _, collection := range collections {
 		if collection.Amount == transaction.Amount {
 			collectionMatches++
-			id := collection.ID
-			collectionID = &id
+			matchedCollection = collection
 		}
 	}
 
-	method := "unmatched"
-	if studentMatches == 1 && collectionMatches == 1 {
-		method = "auto_exact"
-	} else {
-		studentID = nil
-		collectionID = nil
-	}
-	if err := m.payments.Create(ctx, domain.Payment{
+	payment := domain.Payment{
 		MonoTxID: transaction.ID, Amount: transaction.Amount, CommentRaw: transaction.Comment,
-		ReceivedAt: transaction.OccurredAt, StudentID: studentID, CollectionID: collectionID,
-		MatchMethod: method, MatchedAt: m.now(),
-	}); err != nil {
+		ReceivedAt: transaction.OccurredAt, MatchMethod: "unmatched", MatchedAt: m.now(),
+	}
+	if studentMatches == 1 && collectionMatches == 1 {
+		payment.MatchMethod = "auto_exact"
+		payment.StudentID = &matchedStudent.ID
+		payment.CollectionID = &matchedCollection.ID
+	}
+	method := payment.MatchMethod
+	id, err := m.payments.Create(ctx, payment)
+	if err != nil {
 		return fmt.Errorf("record transaction %q: %w", transaction.ID, err)
 	}
+	payment.ID = id
 	// Comments are not logged: they can contain personal names.
 	slog.Info("payment recorded", "tx_id", transaction.ID, "amount", transaction.Amount, "method", method,
 		"student_matches", studentMatches, "collection_matches", collectionMatches)
-	if method == "auto_exact" {
-		if _, err := m.collections.CloseIfAllStudentsPaid(ctx, *collectionID); err != nil {
-			return fmt.Errorf("auto-close collection %d: %w", *collectionID, err)
-		}
+	if method != "auto_exact" {
+		m.events.PaymentUnmatched(ctx, payment)
+		return nil
+	}
+	m.events.PaymentMatched(ctx, matchedStudent, matchedCollection, payment)
+	if err := m.closeIfComplete(ctx, matchedCollection); err != nil {
+		return fmt.Errorf("auto-close collection %d: %w", matchedCollection.ID, err)
 	}
 	return nil
 }
 
 func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID, collectionID int64) error {
-	if _, err := m.students.GetByID(ctx, studentID); err != nil {
+	student, err := m.students.GetByID(ctx, studentID)
+	if err != nil {
 		return fmt.Errorf("validate student %d: %w", studentID, err)
+	}
+	payment, err := m.payments.GetByID(ctx, paymentID)
+	if err != nil {
+		return fmt.Errorf("validate payment %d: %w", paymentID, err)
 	}
 
 	collections, err := m.collections.ListActive(ctx)
 	if err != nil {
 		return fmt.Errorf("validate collection %d: %w", collectionID, err)
 	}
+	var collection domain.Collection
 	validCollection := false
-	for _, collection := range collections {
-		if collection.ID == collectionID {
+	for _, item := range collections {
+		if item.ID == collectionID {
+			collection = item
 			validCollection = true
 			break
 		}
@@ -112,10 +160,14 @@ func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID
 	if !validCollection {
 		return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
 	}
-	if err := m.payments.UpdateMatch(ctx, paymentID, studentID, collectionID, "manual_admin", m.now()); err != nil {
+	now := m.now()
+	if err := m.payments.UpdateMatch(ctx, paymentID, studentID, collectionID, "manual_admin", now); err != nil {
 		return fmt.Errorf("manually match payment %d: %w", paymentID, err)
 	}
-	if _, err := m.collections.CloseIfAllStudentsPaid(ctx, collectionID); err != nil {
+	payment.StudentID, payment.CollectionID = &student.ID, &collection.ID
+	payment.MatchMethod, payment.MatchedAt = "manual_admin", now
+	m.events.PaymentMatched(ctx, student, collection, payment)
+	if err := m.closeIfComplete(ctx, collection); err != nil {
 		return fmt.Errorf("auto-close collection %d after manual match: %w", collectionID, err)
 	}
 	return nil
@@ -150,15 +202,19 @@ func (m *PaymentMatcher) RecordCash(ctx context.Context, studentID, collectionID
 		return fmt.Errorf("student %d, collection %d: %w", studentID, collectionID, domain.ErrAlreadyPaid)
 	}
 	now := m.now()
-	if err := m.payments.Create(ctx, domain.Payment{
+	payment := domain.Payment{
 		MonoTxID: fmt.Sprintf("cash-%d-%d-%d", collectionID, studentID, now.UnixNano()),
 		Amount:   collection.Amount, CommentRaw: "Готівковий платіж",
 		ReceivedAt: now, StudentID: &student.ID, CollectionID: &collection.ID,
 		MatchMethod: "manual_cash", MatchedAt: now,
-	}); err != nil {
+	}
+	id, err := m.payments.Create(ctx, payment)
+	if err != nil {
 		return fmt.Errorf("record cash payment: %w", err)
 	}
-	if _, err := m.collections.CloseIfAllStudentsPaid(ctx, collectionID); err != nil {
+	payment.ID = id
+	m.events.PaymentMatched(ctx, student, collection, payment)
+	if err := m.closeIfComplete(ctx, collection); err != nil {
 		return fmt.Errorf("auto-close collection after cash payment: %w", err)
 	}
 	return nil

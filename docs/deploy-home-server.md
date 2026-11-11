@@ -22,7 +22,7 @@ Edit `.env`. Fill in the required values (see the README section "Getting your t
 **pin a version** so upgrades only happen when you choose:
 
 ```dotenv
-BOT_VERSION=0.1.0
+BOT_VERSION=0.2.0
 ```
 
 Start it:

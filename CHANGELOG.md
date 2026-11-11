@@ -6,19 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-11
+
 ### Added
 - `/status`, `/export` and `/closecollection` without an ID show the collections as buttons, so
   collection IDs never have to be typed or guessed. Passing an ID still works.
 - Archive of closed collections (`/collections` → "Архів") with their status and CSV export.
 - "Експорт CSV" button and the collected total in the collection status.
-
 - Students are told about a new collection as soon as it is created, with the amount, the deadline
   and a button to the jar. Before, the first message was a reminder a day or two later.
 - Students get a confirmation when their payment is matched automatically or recorded as cash.
 - The admin is notified about every new unmatched payment, with a button to match it, and when a
   collection closes because everyone has paid.
 - A student whose registration request is rejected is told so.
-
 - More surname forms are recognised in payment comments, including feminine and genitive ones
   ("за Ковальської", "від Шевчука").
 - The bank's description of a transfer is searched for the surname together with the payer's
@@ -80,5 +80,6 @@ All notable changes to this project are documented here. The format is based on
   `/app/data`) to the new mount: keep the `./data` directory, set `DB_PATH=/data/app.db` (or remove
   it from `.env`), switch to `compose.yaml` and run `sudo chown -R 65532:65532 data`.
 
-[Unreleased]: https://github.com/Goodmoder-ux/collect-bot/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Goodmoder-ux/collect-bot/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Goodmoder-ux/collect-bot/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Goodmoder-ux/collect-bot/releases/tag/v0.1.0

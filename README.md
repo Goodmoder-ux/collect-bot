@@ -9,10 +9,11 @@ A Telegram bot for running group collections (class funds, gifts, trips). It wat
 and automatically matches incoming payments to students by the surname in the payment comment.
 
 - Students register with `/start` by picking their name from the roster, and the admin approves them.
-- The admin creates collections (`/newcollection`) with an amount and a deadline.
+- The admin creates collections (`/newcollection`) with an amount and a deadline. Students are
+  told about each new collection right away.
 - Payments to the jar are matched automatically when the amount equals an active collection and
   the comment contains exactly one student's surname. Everything else lands in `/unmatched` for
-  manual review.
+  manual review, and the admin is notified about it.
 - Daily reminders go to debtors. The admin is notified about overdue collections and gets reports
   and CSV exports (`/status`, `/report`, `/export`).
 - A collection closes automatically once everyone has paid.

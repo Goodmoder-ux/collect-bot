@@ -14,15 +14,46 @@ type fakeContext struct {
 	telebot.Context
 	callback  *telebot.Callback
 	sent      []string
+	edited    []string
+	markup    *telebot.ReplyMarkup
 	responded int
 }
 
 func (f *fakeContext) Callback() *telebot.Callback { return f.callback }
 func (f *fakeContext) Sender() *telebot.User       { return &telebot.User{ID: 42} }
 
-func (f *fakeContext) Send(what any, _ ...any) error {
+func (f *fakeContext) Send(what any, opts ...any) error {
 	f.sent = append(f.sent, fmt.Sprint(what))
+	f.keepMarkup(opts)
 	return nil
+}
+
+func (f *fakeContext) Edit(what any, opts ...any) error {
+	f.edited = append(f.edited, fmt.Sprint(what))
+	f.keepMarkup(opts)
+	return nil
+}
+
+func (f *fakeContext) keepMarkup(opts []any) {
+	for _, opt := range opts {
+		if markup, ok := opt.(*telebot.ReplyMarkup); ok {
+			f.markup = markup
+		}
+	}
+}
+
+// buttons returns "unique|data" for every inline button of the last message.
+func (f *fakeContext) buttons() []string {
+	var result []string
+	if f.markup == nil {
+		return result
+	}
+	for _, row := range f.markup.InlineKeyboard {
+		for _, button := range row {
+			result = append(result, button.Unique+"|"+button.Data)
+		}
+	}
+	return result
 }
 
 func (f *fakeContext) Respond(_ ...*telebot.CallbackResponse) error {

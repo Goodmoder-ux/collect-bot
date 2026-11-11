@@ -57,6 +57,9 @@ type fakeCollections struct {
 func (f *fakeCollections) ListActive(context.Context) ([]domain.Collection, error) {
 	return f.collections, nil
 }
+func (f *fakeCollections) ListClosed(context.Context, int) ([]domain.Collection, error) {
+	return nil, nil
+}
 func (f *fakeCollections) GetByID(_ context.Context, id int64) (domain.Collection, error) {
 	for _, collection := range f.collections {
 		if collection.ID == id {

@@ -72,21 +72,69 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	b.Client.Handle("/export", b.RequireAdmin(func(c telebot.Context) error {
 		return b.exportCollection(c, collections, payments)
 	}))
+	// Kept so the buttons on messages sent by older versions still work.
 	b.Client.Handle(&telebot.Btn{Unique: "collection_status"}, b.RequireAdmin(func(c telebot.Context) error {
-		id, err := strconv.ParseInt(c.Data(), 10, 64)
+		id, err := parseCallbackID(c.Data(), "collection")
 		if err != nil {
 			return err
 		}
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return b.sendCollectionStatus(c, id, collections, payments)
+		return b.sendCollectionStatus(c, id, collections, payments, false)
 	}))
 	b.Client.Handle(&telebot.Btn{Unique: "status_back_collections"}, b.RequireAdmin(func(c telebot.Context) error {
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return showCollections(c, collections, payments)
+		return renderCollectionPicker(c, collections, pickStatus, false, true)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "pick_collection"}, b.RequireAdmin(func(c telebot.Context) error {
+		action, id, err := parsePickData(c.Data())
+		if err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		switch action {
+		case pickExport:
+			return b.sendCollectionExport(c, id, collections, payments)
+		case pickClose:
+			return confirmCloseCollection(c, collections, id, true)
+		default:
+			return b.sendCollectionStatus(c, id, collections, payments, true)
+		}
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "pick_archive"}, b.RequireAdmin(func(c telebot.Context) error {
+		action, err := parsePickAction(c.Data())
+		if err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return renderCollectionPicker(c, collections, action, true, true)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "pick_active"}, b.RequireAdmin(func(c telebot.Context) error {
+		action, err := parsePickAction(c.Data())
+		if err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return renderCollectionPicker(c, collections, action, false, true)
+	}))
+	b.Client.Handle(&telebot.Btn{Unique: "status_export"}, b.RequireAdmin(func(c telebot.Context) error {
+		id, err := parseCallbackID(c.Data(), "collection")
+		if err != nil {
+			return err
+		}
+		if err := c.Respond(); err != nil {
+			return err
+		}
+		return b.sendCollectionExport(c, id, collections, payments)
 	}))
 	b.Client.Handle("/payments", b.RequireStudent(func(c telebot.Context) error {
 		return showCollections(c, collections, payments)
@@ -200,10 +248,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		if err := c.Respond(); err != nil {
 			return err
 		}
-		return b.sendCollectionStatus(c, id, collections, payments)
-	}))
-	b.Client.Handle("/match", b.RequireAdmin(func(c telebot.Context) error {
-		return manuallyMatch(c, b, payments, collections)
+		return b.sendCollectionStatus(c, id, collections, payments, true)
 	}))
 	b.Client.Handle("/report", b.RequireAdmin(func(c telebot.Context) error {
 		return sendReport(c, collections, payments, reports)
@@ -215,7 +260,9 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 	if !ok {
 		return fmt.Errorf("student context is missing")
 	}
-	isAdmin := student.Role == "admin"
+	if student.Role == "admin" {
+		return renderCollectionPicker(c, collections, pickStatus, false, false)
+	}
 	active, err := collections.ListActive(context.Background())
 	if err != nil {
 		return fmt.Errorf("list collections: %w", err)
@@ -225,50 +272,47 @@ func showCollections(c telebot.Context, collections domain.CollectionRepository,
 	}
 	var builder strings.Builder
 	for _, collection := range active {
-		status := "статус доступний студентам"
-		if !isAdmin {
-			paid, err := payments.ExistsForStudentCollection(context.Background(), student.ID, collection.ID)
-			if err != nil {
-				return fmt.Errorf("get payment status: %w", err)
-			}
-			status = "не оплачено"
-			if paid {
-				status = "оплачено"
-			}
+		paid, err := payments.ExistsForStudentCollection(context.Background(), student.ID, collection.ID)
+		if err != nil {
+			return fmt.Errorf("get payment status: %w", err)
+		}
+		status := "не оплачено"
+		if paid {
+			status = "оплачено"
 		}
 		fmt.Fprintf(&builder, "• %s — %s, дедлайн %s — %s\n",
 			collection.Title, formatMoney(collection.Amount), collection.DeadlineAt.Format("02.01.2006 15:04"), status)
-		if isAdmin {
-			markup := &telebot.ReplyMarkup{}
-			markup.Inline(markup.Row(telebot.Btn{
-				Unique: "collection_status", Text: "📊 Деталі платежів", Data: strconv.FormatInt(collection.ID, 10),
-			}))
-			if err := c.Send(fmt.Sprintf("• %s — %s, дедлайн %s — %s", collection.Title, formatMoney(collection.Amount),
-				collection.DeadlineAt.Format("02.01.2006 15:04"), status), markup); err != nil {
-				return err
-			}
-		}
-	}
-	if isAdmin {
-		return nil
 	}
 	return c.Send(builder.String())
 }
 
 func requestCloseCollection(c telebot.Context, collections domain.CollectionRepository) error {
-	id, err := singleIDArgument(c.Text(), "/closecollection")
+	id, given, err := optionalIDArgument(c.Text())
 	if err != nil {
 		return err
 	}
-	if _, err := collections.GetByID(context.Background(), id); err != nil {
-		return fmt.Errorf("get collection %d: %w", id, err)
+	if !given {
+		return renderCollectionPicker(c, collections, pickClose, false, false)
+	}
+	return confirmCloseCollection(c, collections, id, false)
+}
+
+func confirmCloseCollection(c telebot.Context, collections domain.CollectionRepository, id int64, edit bool) error {
+	collection, err := collections.GetByID(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if collection.Status != "active" {
+		return fmt.Errorf("close collection %d: %w", id, domain.ErrCollectionNotActive)
 	}
 	markup := &telebot.ReplyMarkup{}
 	markup.Inline(markup.Row(
 		telebot.Btn{Unique: "close_collection_confirm", Text: "✅ Так, закрити", Data: strconv.FormatInt(id, 10)},
 		telebot.Btn{Unique: "close_collection_cancel", Text: "↩️ Скасувати", Data: strconv.FormatInt(id, 10)},
 	))
-	return c.Send(fmt.Sprintf("Ви впевнені, що хочете закрити збір #%d?", id), markup)
+	text := fmt.Sprintf("Закрити збір «%s»?\nБоржники більше не отримуватимуть нагадувань, а нові платежі не зараховуватимуться автоматично.",
+		collection.Title)
+	return reply(c, edit, text, markup)
 }
 
 func (b *Bot) help(c telebot.Context) error {
@@ -276,14 +320,14 @@ func (b *Bot) help(c telebot.Context) error {
 	if student.Role == "admin" {
 		return c.Send(
 			"📚 Довідка адміністратора\n\n" +
-				"/collections — активні збори та деталі\n" +
+				"/collections — активні збори, архів і деталі\n" +
 				"/newcollection — створити збір через wizard\n" +
-				"/status ID — детальний статус збору\n" +
+				"/status — детальний статус збору (вибір зі списку)\n" +
 				"/unmatched — нерозпізнані платежі\n" +
 				"/students — список, пошук та профілі студентів\n" +
 				"/report — звіт адміністратора\n" +
-				"/export ID — CSV-звіт по збору\n" +
-				"/closecollection ID — закрити збір із підтвердженням\n" +
+				"/export — CSV-звіт по збору (вибір зі списку)\n" +
+				"/closecollection — закрити збір із підтвердженням\n" +
 				"/cancel — скасувати поточний wizard\n" +
 				"/jar — інструкція оплати через Monobank",
 		)
@@ -295,30 +339,6 @@ func (b *Bot) help(c telebot.Context) error {
 			"/help — показати цю довідку\n\n" +
 			"Після оплати вкажіть своє українське прізвище в коментарі до переказу.",
 	)
-}
-
-func manuallyMatch(c telebot.Context, b *Bot, payments domain.PaymentRepository, collections domain.CollectionRepository) error {
-	fields := strings.Fields(c.Text())
-	if len(fields) != 4 {
-		return c.Send("Формат: /match payment_id student_id collection_id")
-	}
-	paymentID, err := strconv.ParseInt(fields[1], 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid payment ID: %w", err)
-	}
-	studentID, err := strconv.ParseInt(fields[2], 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid student ID: %w", err)
-	}
-	collectionID, err := strconv.ParseInt(fields[3], 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid collection ID: %w", err)
-	}
-	matcher := service.NewPaymentMatcher(b.students, collections, payments)
-	if err := matcher.MatchManually(context.Background(), paymentID, studentID, collectionID); err != nil {
-		return err
-	}
-	return c.Send("Платіж зіставлено.")
 }
 
 func sendReport(c telebot.Context, collections domain.CollectionRepository, payments domain.PaymentRepository, reports domain.AdminReportRepository) error {
@@ -344,14 +364,19 @@ func sendReport(c telebot.Context, collections domain.CollectionRepository, paym
 	return nil
 }
 
-func singleIDArgument(text, command string) (int64, error) {
+// optionalIDArgument parses "/command" or "/command ID". given is false when no ID was typed.
+func optionalIDArgument(text string) (id int64, given bool, err error) {
 	fields := strings.Fields(text)
-	if len(fields) != 2 || fields[0] != command {
-		return 0, newUserError("Формат: %s ID", command)
+	switch len(fields) {
+	case 0, 1:
+		return 0, false, nil
+	case 2:
+		id, err := strconv.ParseInt(fields[1], 10, 64)
+		if err != nil || id <= 0 {
+			return 0, false, newUserError("Некоректний ID: %s. Надішліть команду без ID, щоб обрати збір зі списку.", fields[1])
+		}
+		return id, true, nil
+	default:
+		return 0, false, newUserError("Забагато аргументів. Надішліть команду без ID, щоб обрати збір зі списку.")
 	}
-	id, err := strconv.ParseInt(fields[1], 10, 64)
-	if err != nil || id <= 0 {
-		return 0, newUserError("Некоректний ID: %s. Потрібне додатне число.", fields[1])
-	}
-	return id, nil
 }

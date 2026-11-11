@@ -15,14 +15,19 @@ import (
 )
 
 func (b *Bot) showCollectionStatus(c telebot.Context, collections domain.CollectionRepository, payments domain.PaymentRepository) error {
-	id, err := singleIDArgument(c.Text(), "/status")
+	id, given, err := optionalIDArgument(c.Text())
 	if err != nil {
 		return err
 	}
-	return b.sendCollectionStatus(c, id, collections, payments)
+	if !given {
+		return renderCollectionPicker(c, collections, pickStatus, false, false)
+	}
+	return b.sendCollectionStatus(c, id, collections, payments, false)
 }
 
-func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections domain.CollectionRepository, payments domain.PaymentRepository) error {
+// sendCollectionStatus shows the payment status of one collection. With edit it
+// replaces the message the pressed button belongs to instead of sending a new one.
+func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections domain.CollectionRepository, payments domain.PaymentRepository, edit bool) error {
 	collection, err := collections.GetByID(context.Background(), id)
 	if err != nil {
 		return err
@@ -36,9 +41,11 @@ func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections doma
 		return err
 	}
 	paid := make(map[int64]domain.Payment)
+	var collected int64
 	for _, payment := range paidPayments {
 		if payment.StudentID != nil {
 			paid[*payment.StudentID] = payment
+			collected += payment.Amount
 		}
 	}
 	var body strings.Builder
@@ -48,8 +55,13 @@ func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections doma
 	if total > 0 {
 		percent = count * 100 / total
 	}
-	fmt.Fprintf(&body, "Збір: %s\nСума на людину: %s\nДедлайн: %s\nСплачено: %d/%d (%d%%)\n\n",
-		collection.Title, formatMoney(collection.Amount), collection.DeadlineAt.Format("02.01.2006 15:04"), count, total, percent)
+	fmt.Fprintf(&body, "Збір: %s\nСума на людину: %s\nДедлайн: %s\n",
+		collection.Title, formatMoney(collection.Amount), collection.DeadlineAt.Format("02.01.2006 15:04"))
+	active := collection.Status == "active"
+	if !active {
+		fmt.Fprintf(&body, "Статус: %s\n", closedLabel(collection))
+	}
+	fmt.Fprintf(&body, "Сплачено: %d/%d (%d%%)\nЗібрано: %s\n\n", count, total, percent, formatMoney(collected))
 	body.WriteString("Сплатили:\n")
 	for _, student := range students {
 		payment, ok := paid[student.ID]
@@ -64,15 +76,50 @@ func (b *Bot) sendCollectionStatus(c telebot.Context, id int64, collections doma
 			fmt.Fprintf(&body, "❌ %s\n", student.FullName)
 		}
 	}
+	return reply(c, edit, body.String(), statusMarkup(id, active))
+}
+
+// statusMarkup builds the action buttons under a collection status. A closed
+// collection can only be exported.
+func statusMarkup(id int64, active bool) *telebot.ReplyMarkup {
+	data := strconv.FormatInt(id, 10)
 	markup := &telebot.ReplyMarkup{}
-	markup.Inline(markup.Row(
-		telebot.Btn{Unique: "status_remind", Text: "🔔 Нагадати боржникам", Data: strconv.FormatInt(id, 10)},
-		telebot.Btn{Unique: "status_cash", Text: "💵 Додати готівковий платіж", Data: strconv.FormatInt(id, 10)},
-		telebot.Btn{Unique: "status_close", Text: "🔒 Закрити збір", Data: strconv.FormatInt(id, 10)},
-	), markup.Row(
-		telebot.Btn{Unique: "status_back_collections", Text: "↩️ До списку зборів", Data: ""},
-	))
-	return c.Send(body.String(), markup)
+	export := telebot.Btn{Unique: "status_export", Text: "📄 Експорт CSV", Data: data}
+	if !active {
+		markup.Inline(
+			markup.Row(export),
+			markup.Row(telebot.Btn{Unique: "pick_archive", Text: "↩️ До архіву", Data: pickStatus}),
+		)
+		return markup
+	}
+	markup.Inline(
+		markup.Row(
+			telebot.Btn{Unique: "status_remind", Text: "🔔 Нагадати", Data: data},
+			telebot.Btn{Unique: "status_cash", Text: "💵 Готівка", Data: data},
+		),
+		markup.Row(
+			export,
+			telebot.Btn{Unique: "status_close", Text: "🔒 Закрити збір", Data: data},
+		),
+		markup.Row(telebot.Btn{Unique: "status_back_collections", Text: "↩️ До списку зборів", Data: ""}),
+	)
+	return markup
+}
+
+func closedLabel(collection domain.Collection) string {
+	label := "закрито"
+	if collection.ClosedAt != nil {
+		label += " " + collection.ClosedAt.In(time.Local).Format("02.01.2006")
+	}
+	if collection.ClosedReason != nil {
+		switch *collection.ClosedReason {
+		case "all_paid":
+			label += " (усі сплатили)"
+		case "manual_admin":
+			label += " (вручну)"
+		}
+	}
+	return label
 }
 
 func paymentMethodLabel(method string) string {
@@ -195,10 +242,17 @@ func (w cashPaymentWorkflow) execute(c telebot.Context) error {
 }
 
 func (b *Bot) exportCollection(c telebot.Context, collections domain.CollectionRepository, payments domain.PaymentRepository) error {
-	id, err := singleIDArgument(c.Text(), "/export")
+	id, given, err := optionalIDArgument(c.Text())
 	if err != nil {
 		return err
 	}
+	if !given {
+		return renderCollectionPicker(c, collections, pickExport, false, false)
+	}
+	return b.sendCollectionExport(c, id, collections, payments)
+}
+
+func (b *Bot) sendCollectionExport(c telebot.Context, id int64, collections domain.CollectionRepository, payments domain.PaymentRepository) error {
 	collection, err := collections.GetByID(context.Background(), id)
 	if err != nil {
 		return err
@@ -238,6 +292,8 @@ func (b *Bot) exportCollection(c telebot.Context, collections domain.CollectionR
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	document := &telebot.Document{File: telebot.FromReader(bytes.NewReader(buffer.Bytes())), FileName: fmt.Sprintf("collection-%d.csv", collection.ID), MIME: "text/csv"}
+	document := &telebot.Document{File: telebot.FromReader(bytes.NewReader(buffer.Bytes())), FileName: fmt.Sprintf("collection-%d.csv", collection.ID), MIME: "text/csv",
+		Caption: "Збір: " + collection.Title,
+	}
 	return c.Send(document)
 }

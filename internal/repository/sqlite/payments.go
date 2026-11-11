@@ -132,7 +132,7 @@ func (r *PaymentRepository) Create(ctx context.Context, payment domain.Payment) 
 func (r *PaymentRepository) UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error {
 	result, err := r.db.ExecContext(ctx, `UPDATE payments
 		SET student_id = ?, collection_id = ?, match_method = ?, matched_at = ?
-		WHERE id = ?`, studentID, collectionID, method, matchedAt, paymentID)
+		WHERE id = ? AND match_method = 'unmatched'`, studentID, collectionID, method, matchedAt, paymentID)
 	if err != nil {
 		return fmt.Errorf("update payment %d match: %w", paymentID, err)
 	}
@@ -141,7 +141,8 @@ func (r *PaymentRepository) UpdateMatch(ctx context.Context, paymentID, studentI
 		return fmt.Errorf("check payment %d update: %w", paymentID, err)
 	}
 	if affected != 1 {
-		return fmt.Errorf("update payment %d match: %w", paymentID, sql.ErrNoRows)
+		// Only payments waiting for review can be matched, so a second attempt changes nothing.
+		return fmt.Errorf("update payment %d match: %w", paymentID, domain.ErrPaymentAlreadyMatched)
 	}
 	return nil
 }

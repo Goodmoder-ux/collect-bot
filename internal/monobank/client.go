@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Goodmoder-ux/collect-bot/internal/domain"
@@ -98,16 +99,27 @@ func (c *Client) GetTransactions(ctx context.Context, accountID string, from, to
 		if item.Amount <= 0 {
 			continue
 		}
-		comment := item.Comment
-		if comment == "" {
-			comment = item.Description
-		}
 		transactions = append(transactions, domain.Transaction{
-			ID: item.ID, Amount: item.Amount, Comment: comment,
+			ID: item.ID, Amount: item.Amount, Comment: transactionComment(item.Comment, item.Description),
 			OccurredAt: time.Unix(item.Time, 0).UTC(),
 		})
 	}
 	return transactions, nil
+}
+
+// transactionComment joins the payer's comment with the bank's description.
+// The surname may be in either: people often leave the comment empty or write
+// something else, while the description usually names the sender.
+func transactionComment(comment, description string) string {
+	comment, description = strings.TrimSpace(comment), strings.TrimSpace(description)
+	switch {
+	case comment == "" || comment == description:
+		return description
+	case description == "":
+		return comment
+	default:
+		return comment + " · " + description
+	}
 }
 
 func parseRetryAfter(value string) time.Duration {

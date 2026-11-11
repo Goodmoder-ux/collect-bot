@@ -149,9 +149,27 @@ func (w *collectionWizard) confirm(c telebot.Context, state collectionWizardStat
 		telebot.Btn{Unique: "collection_confirm", Text: "✅ Створити збір", Data: "confirm"},
 		telebot.Btn{Unique: "collection_cancel", Text: "❌ Скасувати", Data: "cancel"},
 	))
-	return c.Send(fmt.Sprintf(
+	text := fmt.Sprintf(
 		"Перевірте дані збору:\nНазва: %s\nСума: %s\nДедлайн: %s",
-		state.title, formatMoney(state.amount), state.deadline.Format("02.01.2006 15:04")), markup)
+		state.title, formatMoney(state.amount), state.deadline.Format("02.01.2006 15:04"))
+	active, err := w.repo.ListActive(context.Background())
+	if err != nil {
+		return fmt.Errorf("collection wizard: list active collections: %w", err)
+	}
+	return c.Send(text+sameAmountWarning(active, state.amount), markup)
+}
+
+// sameAmountWarning explains how payments are split when an active collection
+// already has the amount of the one being created.
+func sameAmountWarning(active []domain.Collection, amount int64) string {
+	for _, collection := range active {
+		if collection.Amount == amount {
+			return fmt.Sprintf("\n\n⚠️ Уже є активний збір «%s» на таку саму суму. "+
+				"Платіж студента автоматично піде до того з цих зборів, який він ще не оплатив і в якого ближчий дедлайн.",
+				collection.Title)
+		}
+	}
+	return ""
 }
 
 func (w *collectionWizard) confirmCallback(c telebot.Context) error {
@@ -339,18 +357,33 @@ func (w unmatchedWorkflow) chooseCollection(c telebot.Context) error {
 	if err != nil {
 		return fmt.Errorf("unmatched workflow: list collections: %w", err)
 	}
+	studentID, err := parseCallbackID(parts[1], "student")
+	if err != nil {
+		return err
+	}
 	markup := &telebot.ReplyMarkup{}
 	rows := make([]telebot.Row, 0, len(collections))
 	for _, collection := range collections {
+		// A student can pay a collection only once, so paid ones are not offered.
+		paid, err := w.payments.ExistsForStudentCollection(context.Background(), studentID, collection.ID)
+		if err != nil {
+			return fmt.Errorf("unmatched workflow: check student %d payment: %w", studentID, err)
+		}
+		if paid {
+			continue
+		}
 		rows = append(rows, markup.Row(telebot.Btn{
 			Unique: "match_collection", Text: fmt.Sprintf("%s (%s)", collection.Title, formatMoney(collection.Amount)),
 			Data: fmt.Sprintf("%s|%d", c.Data(), collection.ID),
 		}))
 	}
-	markup.Inline(rows...)
 	if err := c.Respond(); err != nil {
 		return err
 	}
+	if len(rows) == 0 {
+		return c.Edit("Цей студент уже оплатив усі активні збори.")
+	}
+	markup.Inline(rows...)
 	return c.Edit("Оберіть активний збір:", markup)
 }
 

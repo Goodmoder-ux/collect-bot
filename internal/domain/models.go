@@ -94,6 +94,8 @@ type PaymentRepository interface {
 	ListForStudent(ctx context.Context, studentID int64) ([]Payment, error)
 	// Create stores a payment and returns its ID.
 	Create(ctx context.Context, payment Payment) (int64, error)
+	// UpdateMatch assigns a payment that is still unmatched; anything else fails
+	// with ErrPaymentAlreadyMatched.
 	UpdateMatch(ctx context.Context, paymentID, studentID, collectionID int64, method string, matchedAt time.Time) error
 }
 

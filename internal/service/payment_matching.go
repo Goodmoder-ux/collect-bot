@@ -96,12 +96,10 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 	if err != nil {
 		return fmt.Errorf("find collection for transaction %q: %w", transaction.ID, err)
 	}
-	var matchedCollection domain.Collection
-	var collectionMatches int
+	var sameAmount []domain.Collection
 	for _, collection := range collections {
 		if collection.Amount == transaction.Amount {
-			collectionMatches++
-			matchedCollection = collection
+			sameAmount = append(sameAmount, collection)
 		}
 	}
 
@@ -109,21 +107,39 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 		MonoTxID: transaction.ID, Amount: transaction.Amount, CommentRaw: transaction.Comment,
 		ReceivedAt: transaction.OccurredAt, MatchMethod: "unmatched", MatchedAt: m.now(),
 	}
-	if studentMatches == 1 && collectionMatches == 1 {
+	var matchedCollection domain.Collection
+	reason := "ok"
+	switch {
+	case studentMatches == 0:
+		reason = "no_student"
+	case studentMatches > 1:
+		reason = "ambiguous_student"
+	case len(sameAmount) == 0:
+		reason = "no_collection_with_amount"
+	default:
+		collection, found, err := m.unpaidCollection(ctx, matchedStudent.ID, sameAmount)
+		if err != nil {
+			return fmt.Errorf("find unpaid collection for transaction %q: %w", transaction.ID, err)
+		}
+		if !found {
+			// A repeated payment: leave it for the admin instead of recording it twice.
+			reason = "already_paid"
+			break
+		}
+		matchedCollection = collection
 		payment.MatchMethod = "auto_exact"
 		payment.StudentID = &matchedStudent.ID
 		payment.CollectionID = &matchedCollection.ID
 	}
-	method := payment.MatchMethod
 	id, err := m.payments.Create(ctx, payment)
 	if err != nil {
 		return fmt.Errorf("record transaction %q: %w", transaction.ID, err)
 	}
 	payment.ID = id
 	// Comments are not logged: they can contain personal names.
-	slog.Info("payment recorded", "tx_id", transaction.ID, "amount", transaction.Amount, "method", method,
-		"student_matches", studentMatches, "collection_matches", collectionMatches)
-	if method != "auto_exact" {
+	slog.Info("payment recorded", "tx_id", transaction.ID, "amount", transaction.Amount, "method", payment.MatchMethod,
+		"reason", reason, "student_matches", studentMatches, "collection_matches", len(sameAmount))
+	if payment.MatchMethod != "auto_exact" {
 		m.events.PaymentUnmatched(ctx, payment)
 		return nil
 	}
@@ -132,6 +148,29 @@ func (m *PaymentMatcher) processTransaction(ctx context.Context, transaction dom
 		return fmt.Errorf("auto-close collection %d: %w", matchedCollection.ID, err)
 	}
 	return nil
+}
+
+// unpaidCollection picks the collection a payment should go to when several
+// active ones have the same amount: the one the student has not paid yet with
+// the nearest deadline. found is false when the student has paid them all.
+func (m *PaymentMatcher) unpaidCollection(ctx context.Context, studentID int64, candidates []domain.Collection) (domain.Collection, bool, error) {
+	var best domain.Collection
+	found := false
+	for _, collection := range candidates {
+		paid, err := m.payments.ExistsForStudentCollection(ctx, studentID, collection.ID)
+		if err != nil {
+			return domain.Collection{}, false, err
+		}
+		if paid {
+			continue
+		}
+		if !found || collection.DeadlineAt.Before(best.DeadlineAt) ||
+			(collection.DeadlineAt.Equal(best.DeadlineAt) && collection.ID < best.ID) {
+			best = collection
+			found = true
+		}
+	}
+	return best, found, nil
 }
 
 func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID, collectionID int64) error {
@@ -159,6 +198,16 @@ func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID
 	}
 	if !validCollection {
 		return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
+	}
+	if payment.MatchMethod != "unmatched" {
+		return fmt.Errorf("payment %d: %w", paymentID, domain.ErrPaymentAlreadyMatched)
+	}
+	paid, err := m.payments.ExistsForStudentCollection(ctx, studentID, collectionID)
+	if err != nil {
+		return fmt.Errorf("check existing payment before manual match: %w", err)
+	}
+	if paid {
+		return fmt.Errorf("student %d, collection %d: %w", studentID, collectionID, domain.ErrAlreadyPaid)
 	}
 	now := m.now()
 	if err := m.payments.UpdateMatch(ctx, paymentID, studentID, collectionID, "manual_admin", now); err != nil {

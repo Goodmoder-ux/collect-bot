@@ -347,11 +347,11 @@ func sendReport(c telebot.Context, collections domain.CollectionRepository, paym
 func singleIDArgument(text, command string) (int64, error) {
 	fields := strings.Fields(text)
 	if len(fields) != 2 || fields[0] != command {
-		return 0, fmt.Errorf("format: %s ID", command)
+		return 0, newUserError("Формат: %s ID", command)
 	}
 	id, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("invalid ID %q", fields[1])
+		return 0, newUserError("Некоректний ID: %s. Потрібне додатне число.", fields[1])
 	}
 	return id, nil
 }

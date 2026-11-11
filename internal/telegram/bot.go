@@ -17,12 +17,14 @@ type Bot struct {
 
 func NewBot(token string, adminID int64, students domain.StudentRepository) (*Bot, error) {
 	client, err := telebot.NewBot(telebot.Settings{
-		Token:  token,
-		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
+		Token:   token,
+		Poller:  &telebot.LongPoller{Timeout: 10 * time.Second},
+		OnError: handleError,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("telegram: create bot: %w", err)
 	}
+	client.Use(recoverPanics)
 	bot := &Bot{Client: client, students: students, adminID: adminID}
 	if err := bot.setCommands(); err != nil {
 		return nil, err

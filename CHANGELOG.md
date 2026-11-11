@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- The bot now replies when a command or button fails instead of staying silent, and inline
+  buttons no longer keep spinning after an error. A handler panic no longer crashes the bot.
+
 ## [0.1.0] - 2026-10-18
 
 ### Added

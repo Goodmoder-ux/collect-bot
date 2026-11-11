@@ -115,7 +115,7 @@ func (r *CollectionRepository) CloseManually(ctx context.Context, collectionID i
 		return fmt.Errorf("check manual close for collection %d: %w", collectionID, err)
 	}
 	if affected != 1 {
-		return fmt.Errorf("collection %d is not active", collectionID)
+		return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
 	}
 	return nil
 }

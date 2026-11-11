@@ -110,7 +110,7 @@ func (m *PaymentMatcher) MatchManually(ctx context.Context, paymentID, studentID
 		}
 	}
 	if !validCollection {
-		return fmt.Errorf("collection %d is not active", collectionID)
+		return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
 	}
 	if err := m.payments.UpdateMatch(ctx, paymentID, studentID, collectionID, "manual_admin", m.now()); err != nil {
 		return fmt.Errorf("manually match payment %d: %w", paymentID, err)
@@ -140,14 +140,14 @@ func (m *PaymentMatcher) RecordCash(ctx context.Context, studentID, collectionID
 		}
 	}
 	if !found {
-		return fmt.Errorf("collection %d is not active", collectionID)
+		return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
 	}
 	paid, err := m.payments.ExistsForStudentCollection(ctx, studentID, collectionID)
 	if err != nil {
 		return fmt.Errorf("check existing cash payment: %w", err)
 	}
 	if paid {
-		return fmt.Errorf("student %d already paid collection %d", studentID, collectionID)
+		return fmt.Errorf("student %d, collection %d: %w", studentID, collectionID, domain.ErrAlreadyPaid)
 	}
 	now := m.now()
 	if err := m.payments.Create(ctx, domain.Payment{

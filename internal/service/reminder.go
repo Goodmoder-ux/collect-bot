@@ -72,7 +72,7 @@ func (s *ReminderScheduler) SendDebtorReminderForCollection(ctx context.Context,
 			return s.sendForCollection(ctx, collection, false)
 		}
 	}
-	return fmt.Errorf("collection %d is not active", collectionID)
+	return fmt.Errorf("collection %d: %w", collectionID, domain.ErrCollectionNotActive)
 }
 
 func (s *ReminderScheduler) sendForCollection(ctx context.Context, collection domain.Collection, enforceAge bool) error {

@@ -162,7 +162,7 @@ func (w *collectionWizard) confirmCallback(c telebot.Context) error {
 	}
 	w.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("collection wizard: no active collection")
+		return newUserError("Ця дія вже неактуальна. Щоб створити збір, почніть заново: /newcollection")
 	}
 	if err := c.Respond(); err != nil {
 		return err

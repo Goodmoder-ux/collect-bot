@@ -118,6 +118,8 @@ func (b *Bot) handleApproval(approve bool) telebot.HandlerFunc {
 			if err := b.students.DeletePendingRegistration(context.Background(), studentID); err != nil {
 				return fmt.Errorf("registration: delete rejected request %d: %w", studentID, err)
 			}
+			b.notify(request.TelegramID, "❌ Запит на реєстрацію відхилено.\n"+
+				"Якщо це помилка, зверніться до адміністратора або надішліть /start, щоб спробувати ще раз.")
 			return c.Edit("Реєстрацію відхилено.")
 		}
 		if err := b.students.SetTelegramID(context.Background(), studentID, request.TelegramID); err != nil {
@@ -126,14 +128,12 @@ func (b *Bot) handleApproval(approve bool) telebot.HandlerFunc {
 		if err := b.students.DeletePendingRegistration(context.Background(), studentID); err != nil {
 			return fmt.Errorf("registration: delete approved request %d: %w", studentID, err)
 		}
-		student := &telebot.User{ID: request.TelegramID}
 		selected, err := b.students.GetByID(context.Background(), studentID)
 		if err != nil {
 			return fmt.Errorf("registration: get approved student %d: %w", studentID, err)
 		}
-		if _, err := b.Client.Send(student, fmt.Sprintf("✅ Реєстрацію підтверджено: %s", selected.FullName)); err != nil {
-			return fmt.Errorf("registration: notify approved student: %w", err)
-		}
+		b.notify(request.TelegramID, fmt.Sprintf("✅ Реєстрацію підтверджено: %s\n"+
+			"Активні збори та ваш статус: /collections", selected.FullName))
 		return c.Edit("Реєстрацію підтверджено.")
 	}
 }

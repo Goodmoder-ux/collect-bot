@@ -12,6 +12,13 @@ All notable changes to this project are documented here. The format is based on
 - Archive of closed collections (`/collections` → "Архів") with their status and CSV export.
 - "Експорт CSV" button and the collected total in the collection status.
 
+- Students are told about a new collection as soon as it is created, with the amount, the deadline
+  and a button to the jar. Before, the first message was a reminder a day or two later.
+- Students get a confirmation when their payment is matched automatically or recorded as cash.
+- The admin is notified about every new unmatched payment, with a button to match it, and when a
+  collection closes because everyone has paid.
+- A student whose registration request is rejected is told so.
+
 ### Changed
 - The admin's `/collections` is a single message with one button per collection.
 - Buttons under the collection status are shorter and laid out in two rows so they are not cut off
@@ -21,6 +28,8 @@ All notable changes to this project are documented here. The format is based on
 - `/match payment_id student_id collection_id`. Use the buttons in `/unmatched` instead.
 
 ### Fixed
+- Matching a payment or approving a registration no longer reports an error when the student
+  cannot be notified (for example, they blocked the bot).
 - The bot now replies when a command or button fails instead of staying silent, and inline
   buttons no longer keep spinning after an error. A handler panic no longer crashes the bot.
 

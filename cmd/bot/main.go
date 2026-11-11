@@ -119,10 +119,12 @@ func run() error {
 		return err
 	}
 	bot.RegisterRegistrationHandlers()
+	// Set before the poller starts: payment outcomes are announced through the bot.
+	matcher.SetEvents(telegram.NewPaymentEvents(bot))
 	notifier := telegram.NewNotifier(bot)
 	reminder := service.NewReminderScheduler(students, collections, payments, reminders, notifier, cfg.JarURL)
 	deadlines := service.NewDeadlineChecker(collections, notifier, cfg.AdminTelegramID)
-	bot.RegisterAdminStudentHandlers(collections, payments, reports, reminder, cfg.JarURL)
+	bot.RegisterAdminStudentHandlers(collections, payments, reports, reminder, matcher, cfg.JarURL)
 
 	errs := make(chan error, 3)
 	go func() {

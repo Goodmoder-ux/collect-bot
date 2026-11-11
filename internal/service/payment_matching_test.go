@@ -52,6 +52,8 @@ func (f *fakeStudents) UnlinkTelegramID(context.Context, int64) error { return n
 type fakeCollections struct {
 	collections []domain.Collection
 	closed      []int64
+	// closeResult is what CloseIfAllStudentsPaid reports.
+	closeResult bool
 }
 
 func (f *fakeCollections) ListActive(context.Context) ([]domain.Collection, error) {
@@ -70,7 +72,7 @@ func (f *fakeCollections) GetByID(_ context.Context, id int64) (domain.Collectio
 }
 func (f *fakeCollections) CloseIfAllStudentsPaid(_ context.Context, id int64) (bool, error) {
 	f.closed = append(f.closed, id)
-	return false, nil
+	return f.closeResult, nil
 }
 func (f *fakeCollections) Create(context.Context, string, int64, time.Time) (int64, error) {
 	return 0, nil
@@ -89,8 +91,8 @@ func (f *fakePayments) ExistsByMonoTransactionID(_ context.Context, id string) (
 func (f *fakePayments) ExistsForStudentCollection(context.Context, int64, int64) (bool, error) {
 	return false, nil
 }
-func (f *fakePayments) GetByID(context.Context, int64) (domain.Payment, error) {
-	return domain.Payment{}, errors.New("not implemented")
+func (f *fakePayments) GetByID(_ context.Context, id int64) (domain.Payment, error) {
+	return domain.Payment{ID: id, Amount: 15000, MatchMethod: "unmatched"}, nil
 }
 func (f *fakePayments) ListUnmatched(context.Context) ([]domain.Payment, error) { return nil, nil }
 func (f *fakePayments) ListForCollection(context.Context, int64) ([]domain.Payment, error) {
@@ -99,9 +101,9 @@ func (f *fakePayments) ListForCollection(context.Context, int64) ([]domain.Payme
 func (f *fakePayments) ListForStudent(context.Context, int64) ([]domain.Payment, error) {
 	return nil, nil
 }
-func (f *fakePayments) Create(_ context.Context, payment domain.Payment) error {
+func (f *fakePayments) Create(_ context.Context, payment domain.Payment) (int64, error) {
 	f.created = append(f.created, payment)
-	return nil
+	return int64(len(f.created)), nil
 }
 func (f *fakePayments) UpdateMatch(_ context.Context, paymentID, _, _ int64, _ string, _ time.Time) error {
 	f.updated = append(f.updated, paymentID)

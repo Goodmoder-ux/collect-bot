@@ -34,10 +34,13 @@ type collectionWizard struct {
 	state map[int64]collectionWizardState
 	repo  domain.CollectionRepository
 	admin int64
+	// announce tells registered students about a new collection and reports
+	// how many of them were reached.
+	announce func(domain.Collection) (sent, total int)
 }
 
-func newCollectionWizard(repo domain.CollectionRepository, adminID int64) *collectionWizard {
-	return &collectionWizard{state: make(map[int64]collectionWizardState), repo: repo, admin: adminID}
+func newCollectionWizard(repo domain.CollectionRepository, adminID int64, announce func(domain.Collection) (sent, total int)) *collectionWizard {
+	return &collectionWizard{state: make(map[int64]collectionWizardState), repo: repo, admin: adminID, announce: announce}
 }
 
 func (w *collectionWizard) start(c telebot.Context) error {
@@ -174,7 +177,22 @@ func (w *collectionWizard) confirmCallback(c telebot.Context) error {
 	if err != nil {
 		return fmt.Errorf("collection wizard: create collection: %w", err)
 	}
-	return c.Edit(fmt.Sprintf("Збір #%d створено.", id))
+	sent, total := w.announce(domain.Collection{
+		ID: id, Title: state.title, Amount: state.amount, DeadlineAt: state.deadline, Status: "active",
+	})
+	return c.Edit(collectionCreatedText(state.title, sent, total))
+}
+
+func collectionCreatedText(title string, sent, total int) string {
+	text := fmt.Sprintf("✅ Збір «%s» створено.\n", title)
+	switch {
+	case total == 0:
+		return text + "Зареєстрованих студентів ще немає, тож сповіщення нікому не надіслано."
+	case sent == total:
+		return text + fmt.Sprintf("Сповіщення отримали всі зареєстровані студенти (%d).", total)
+	default:
+		return text + fmt.Sprintf("Сповіщення отримали %d з %d зареєстрованих студентів. Решта, ймовірно, заблокували бота.", sent, total)
+	}
 }
 
 func (w *collectionWizard) save(telegramID int64, state collectionWizardState) {
@@ -241,6 +259,7 @@ type unmatchedWorkflow struct {
 	payments    domain.PaymentRepository
 	students    domain.StudentRepository
 	collections domain.CollectionRepository
+	matcher     *service.PaymentMatcher
 }
 
 func (w unmatchedWorkflow) list(c telebot.Context) error {
@@ -256,7 +275,7 @@ func (w unmatchedWorkflow) list(c telebot.Context) error {
 		markup.Inline(markup.Row(telebot.Btn{
 			Unique: "match_payment", Text: "🧩 Прив'язати", Data: strconv.FormatInt(payment.ID, 10),
 		}))
-		if _, err := c.Bot().Send(c.Recipient(), fmt.Sprintf("#%d: %s — %s", payment.ID, formatMoney(payment.Amount), payment.CommentRaw), markup); err != nil {
+		if _, err := c.Bot().Send(c.Recipient(), unmatchedPaymentText(payment), markup); err != nil {
 			return fmt.Errorf("unmatched workflow: send payment %d: %w", payment.ID, err)
 		}
 	}
@@ -351,7 +370,7 @@ func (w unmatchedWorkflow) confirm(c telebot.Context) error {
 	return c.Edit(fmt.Sprintf("Підтвердити прив'язку платежу #%s до студента #%s та збору #%s?", parts[0], parts[1], parts[2]), markup)
 }
 
-func (w unmatchedWorkflow) execute(c telebot.Context, b *Bot) error {
+func (w unmatchedWorkflow) execute(c telebot.Context) error {
 	parts := strings.Split(c.Data(), "|")
 	if len(parts) != 3 {
 		return fmt.Errorf("unmatched workflow: invalid confirmation")
@@ -368,18 +387,9 @@ func (w unmatchedWorkflow) execute(c telebot.Context, b *Bot) error {
 	if err != nil {
 		return fmt.Errorf("unmatched workflow: invalid collection ID: %w", err)
 	}
-	matcher := service.NewPaymentMatcher(w.students, w.collections, w.payments)
-	if err := matcher.MatchManually(context.Background(), paymentID, studentID, collectionID); err != nil {
+	// The matcher notifies the student; a failed notification does not fail the match.
+	if err := w.matcher.MatchManually(context.Background(), paymentID, studentID, collectionID); err != nil {
 		return fmt.Errorf("unmatched workflow: match payment: %w", err)
-	}
-	student, err := w.students.GetByID(context.Background(), studentID)
-	if err != nil {
-		return fmt.Errorf("unmatched workflow: get student: %w", err)
-	}
-	if student.TelegramID != nil {
-		if _, err := b.Client.Send(&telebot.User{ID: *student.TelegramID}, "✅ Ваш платіж підтверджено та прив'язано до збору."); err != nil {
-			return fmt.Errorf("unmatched workflow: notify student: %w", err)
-		}
 	}
 	if err := c.Respond(); err != nil {
 		return err

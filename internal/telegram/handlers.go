@@ -17,9 +17,12 @@ func (b *Bot) RegisterAdminStudentHandlers(
 	payments domain.PaymentRepository,
 	reports domain.AdminReportRepository,
 	reminders *service.ReminderScheduler,
+	matcher *service.PaymentMatcher,
 	jarURL string,
 ) {
-	collectionWizard := newCollectionWizard(collections, b.adminID)
+	collectionWizard := newCollectionWizard(collections, b.adminID, func(collection domain.Collection) (int, int) {
+		return b.announceCollection(collection, jarURL)
+	})
 	b.Client.Handle("/newcollection", b.RequireAdmin(collectionWizard.start))
 	b.Client.Handle("/cancel", b.RequireAdmin(collectionWizard.cancel))
 	b.Client.Handle(telebot.OnText, collectionWizard.text)
@@ -174,15 +177,13 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		return c.Edit("Закриття збору скасовано.")
 	}))
 	b.Client.Handle("/unmatched", b.RequireAdmin(func(c telebot.Context) error {
-		return unmatchedWorkflow{payments: payments, students: b.students, collections: collections}.list(c)
+		return unmatchedWorkflow{payments: payments, students: b.students, collections: collections, matcher: matcher}.list(c)
 	}))
-	workflow := unmatchedWorkflow{payments: payments, students: b.students, collections: collections}
+	workflow := unmatchedWorkflow{payments: payments, students: b.students, collections: collections, matcher: matcher}
 	b.Client.Handle(&telebot.Btn{Unique: "match_payment"}, b.RequireAdmin(workflow.chooseStudent))
 	b.Client.Handle(&telebot.Btn{Unique: "match_student"}, b.RequireAdmin(workflow.chooseCollection))
 	b.Client.Handle(&telebot.Btn{Unique: "match_collection"}, b.RequireAdmin(workflow.confirm))
-	b.Client.Handle(&telebot.Btn{Unique: "match_confirm"}, b.RequireAdmin(func(c telebot.Context) error {
-		return workflow.execute(c, b)
-	}))
+	b.Client.Handle(&telebot.Btn{Unique: "match_confirm"}, b.RequireAdmin(workflow.execute))
 	b.Client.Handle(&telebot.Btn{Unique: "match_cancel"}, b.RequireAdmin(func(c telebot.Context) error {
 		if err := c.Respond(); err != nil {
 			return err
@@ -236,7 +237,7 @@ func (b *Bot) RegisterAdminStudentHandlers(
 		}
 		return c.Edit("Закриття збору скасовано.")
 	}))
-	cashWorkflow := cashPaymentWorkflow{students: b.students, collections: collections, payments: payments}
+	cashWorkflow := cashPaymentWorkflow{students: b.students, collections: collections, payments: payments, matcher: matcher}
 	b.Client.Handle(&telebot.Btn{Unique: "status_cash"}, b.RequireAdmin(cashWorkflow.chooseStudent))
 	b.Client.Handle(&telebot.Btn{Unique: "cash_student"}, b.RequireAdmin(cashWorkflow.chooseCollection))
 	b.Client.Handle(&telebot.Btn{Unique: "cash_collection"}, b.RequireAdmin(cashWorkflow.execute))

@@ -77,7 +77,7 @@ func TestRepositoriesCoverCorePersistence(t *testing.T) {
 	}
 
 	receivedAt := time.Now().UTC()
-	if err := payments.Create(ctx, domain.Payment{
+	if _, err := payments.Create(ctx, domain.Payment{
 		MonoTxID: "mono-repository", Amount: 10000, CommentRaw: "Петренко",
 		ReceivedAt: receivedAt, StudentID: &studentIDValue, CollectionID: &collectionID,
 		MatchMethod: "auto_exact", MatchedAt: receivedAt,
